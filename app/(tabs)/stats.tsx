@@ -657,7 +657,7 @@ export default function StatsScreen() {
           
           {/* Summary Statistics */}
           <View style={styles.statRow}>
-            <Text style={styles.statLabel}>Overall Average Rally Length</Text>
+            <Text style={styles.statLabel}>Average Rally Length</Text>
             <Text style={styles.statValue}>{stats.rallyLengthStats.averageLength.toFixed(1)} shots</Text>
           </View>
           <View style={styles.statRow}>

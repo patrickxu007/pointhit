@@ -301,7 +301,7 @@ export default function ProfileScreen() {
           improve your game.
         </Text>
         <Text style={styles.copyrightText}>© 2025 PointHit™. All rights reserved.</Text>
-        <Text style={styles.versionText}>Version 1.2.0</Text>
+        <Text style={styles.versionText}>Version 1.3.0</Text>
       </View>
     </ScrollView>
   );
