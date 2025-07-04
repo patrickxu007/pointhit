@@ -8,26 +8,24 @@ export const trpc = createTRPCReact<AppRouter>();
 const getBaseUrl = () => {
   // For development, try multiple possible URLs
   if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
+    console.log('Using configured API base URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
     return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   }
   
-  // Fallback URLs for development
+  // Fallback URLs for development - don't throw errors during QR code scanning
   if (__DEV__) {
-    // Try localhost first, then common development URLs
-    const devUrls = [
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://192.168.1.100:3000', // Common local network IP
-    ];
-    
-    console.warn(
-      'EXPO_PUBLIC_RORK_API_BASE_URL not set. Using development fallback URLs.',
-      'Please set EXPO_PUBLIC_RORK_API_BASE_URL in your environment variables.'
+    // Use a safe fallback that won't block app initialization
+    const fallbackUrl = 'http://localhost:3000';
+    console.log(
+      'EXPO_PUBLIC_RORK_API_BASE_URL not set. Using fallback:',
+      fallbackUrl,
+      '\nTo fix this, create a .env file with EXPO_PUBLIC_RORK_API_BASE_URL=your_server_url'
     );
     
-    return devUrls[0]; // Use localhost as default
+    return fallbackUrl;
   }
 
+  // For production, we need the environment variable
   throw new Error(
     "No base url found. Please set EXPO_PUBLIC_RORK_API_BASE_URL environment variable."
   );
@@ -45,10 +43,11 @@ const createTimeoutPromise = (timeoutMs: number): Promise<never> => {
 // Enhanced fetch function with better error handling and proper typing
 const enhancedFetch = async (input: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
   try {
-    console.log('Making TRPC request to:', typeof input === 'string' ? input : input.toString());
+    const url = typeof input === 'string' ? input : input.toString();
+    console.log('Making TRPC request to:', url);
     
-    // Create timeout promise
-    const timeoutPromise = createTimeoutPromise(45000); // 45 second timeout
+    // Create timeout promise - shorter timeout to prevent QR code scanning issues
+    const timeoutPromise = createTimeoutPromise(15000); // 15 second timeout
     
     // Create fetch promise
     const fetchPromise = fetch(input, {
@@ -64,14 +63,13 @@ const enhancedFetch = async (input: RequestInfo | URL, options?: RequestInit): P
     const response = await Promise.race([fetchPromise, timeoutPromise]);
 
     console.log('TRPC response status:', response.status);
-    console.log('TRPC response headers:', Object.fromEntries(response.headers.entries()));
 
     // Check if response is HTML (error page) instead of JSON
     const contentType = response.headers.get('content-type');
     if (contentType && !contentType.includes('application/json')) {
       console.error('Server returned non-JSON response:', contentType);
       const text = await response.text();
-      console.error('Response body:', text.substring(0, 500));
+      console.error('Response body:', text.substring(0, 200));
       throw new Error(`Server returned ${contentType} instead of JSON. This usually indicates a server error.`);
     }
 

@@ -6,6 +6,7 @@ import { View, Text, ActivityIndicator, Platform } from "react-native";
 import Colors from "@/constants/colors";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trpc, trpcReactClient } from "@/lib/trpc";
+import { NetworkStatus } from "@/components/NetworkStatus";
 
 export const unstable_settings = {
   initialRouteName: "(tabs)",
@@ -14,12 +15,18 @@ export const unstable_settings = {
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Create a client
+// Create a client with optimized settings for mobile
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
       staleTime: 5 * 60 * 1000, // 5 minutes
+      refetchOnWindowFocus: false, // Prevent unnecessary refetches on mobile
+      refetchOnMount: false, // Don't refetch on component mount during initialization
+      networkMode: 'offlineFirst', // Handle offline scenarios gracefully
+    },
+    mutations: {
+      networkMode: 'offlineFirst',
     },
   },
 });
@@ -30,15 +37,14 @@ export default function RootLayout() {
   useEffect(() => {
     async function prepare() {
       try {
-        // Add initialization delay to ensure all systems are ready
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Minimal initialization - remove delays that cause QR code scanning issues
+        console.log('Initializing PointHit app...');
         
         // iOS-specific initialization to prevent TTS crashes
         if (Platform.OS === 'ios') {
           try {
             // Don't preload expo-speech during app initialization
             // This was causing TurboModule crashes on iOS
-            // Instead, we'll initialize it lazily when needed
             console.log('iOS detected - TTS will be initialized when needed');
           } catch (error) {
             console.warn('iOS initialization warning:', error);
@@ -48,7 +54,8 @@ export default function RootLayout() {
         console.warn('Error during app initialization:', e);
       } finally {
         setIsReady(true);
-        await SplashScreen.hideAsync();
+        // Hide splash screen after state is ready
+        SplashScreen.hideAsync().catch(console.warn);
       }
     }
 
@@ -80,6 +87,7 @@ export default function RootLayout() {
     <trpc.Provider client={trpcReactClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <StatusBar style="dark" />
+        <NetworkStatus />
         <Stack
           screenOptions={{
             headerBackTitle: "Back",

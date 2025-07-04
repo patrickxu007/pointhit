@@ -51,6 +51,7 @@ module.exports = {
     experiments: {
       typedRoutes: true
     },
+    scheme: "pointhit",
     extra: {
       eas: {
         projectId: "your-project-id-here"

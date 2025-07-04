@@ -3,9 +3,12 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "start": "expo start --tunnel",
-    "start-web": "expo start --web --tunnel",
-    "start-web-dev": "DEBUG=expo* expo start --web --tunnel"
+    "start": "expo start",
+    "start:tunnel": "expo start --tunnel",
+    "start:web": "expo start --web",
+    "start:dev": "expo start --dev-client",
+    "build": "expo export",
+    "build:web": "expo export --platform web"
   },
   "dependencies": {
     "@babel/plugin-proposal-async-generator-functions": "^7.20.7",
