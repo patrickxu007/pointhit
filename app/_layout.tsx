@@ -30,16 +30,18 @@ export default function RootLayout() {
   useEffect(() => {
     async function prepare() {
       try {
-        // Add any initialization logic here
-        await new Promise(resolve => setTimeout(resolve, 500)); // Increased delay to ensure everything is loaded
+        // Add initialization delay to ensure all systems are ready
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // Pre-initialize critical modules on iOS to prevent crashes
+        // iOS-specific initialization to prevent TTS crashes
         if (Platform.OS === 'ios') {
           try {
-            // Pre-load expo-speech module to prevent TurboModule crashes
-            await import('expo-speech');
+            // Don't preload expo-speech during app initialization
+            // This was causing TurboModule crashes on iOS
+            // Instead, we'll initialize it lazily when needed
+            console.log('iOS detected - TTS will be initialized when needed');
           } catch (error) {
-            console.warn('Failed to pre-load expo-speech:', error);
+            console.warn('iOS initialization warning:', error);
           }
         }
       } catch (e) {

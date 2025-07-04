@@ -7,15 +7,57 @@ import { Brain, CheckCircle, Target, TrendingUp, RefreshCw, Play, Pause, Square,
 import { Match, Point, Game, Set, ErrorType, ShotType, TiebreakPoint, MentalPhysicalState, formatEnumValue, calculateRallyLengthStats } from '@/types/tennis';
 import { trpc } from '@/lib/trpc';
 
-// Lazy import Speech to prevent initialization issues
+// Safe TTS initialization with proper error handling
 let Speech: any = null;
-const initializeSpeech = async () => {
-  if (Platform.OS !== 'web' && !Speech) {
+let isSpeechInitialized = false;
+let speechInitializationPromise: Promise<void> | null = null;
+
+const initializeSpeechSafely = async (): Promise<boolean> => {
+  if (Platform.OS === 'web') {
+    return false;
+  }
+
+  if (isSpeechInitialized && Speech) {
+    return true;
+  }
+
+  if (speechInitializationPromise) {
     try {
+      await speechInitializationPromise;
+      return isSpeechInitialized;
+    } catch {
+      return false;
+    }
+  }
+
+  speechInitializationPromise = (async () => {
+    try {
+      // Add delay to ensure app is fully loaded
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       Speech = await import('expo-speech');
+      
+      // Test if Speech is actually working
+      if (Speech && typeof Speech.speak === 'function') {
+        isSpeechInitialized = true;
+        console.log('TTS initialized successfully');
+      } else {
+        throw new Error('Speech module not properly loaded');
+      }
     } catch (error) {
       console.warn('Failed to initialize Speech module:', error);
+      Speech = null;
+      isSpeechInitialized = false;
+      throw error;
     }
+  })();
+
+  try {
+    await speechInitializationPromise;
+    return isSpeechInitialized;
+  } catch {
+    speechInitializationPromise = null;
+    return false;
   }
 };
 
@@ -24,6 +66,7 @@ interface TTSState {
   currentSection: string | null;
   isPaused: boolean;
   isInitialized: boolean;
+  initializationFailed: boolean;
 }
 
 interface ParsedInsights {
@@ -43,7 +86,8 @@ export default function AIInsightsScreen() {
     isPlaying: false,
     currentSection: null,
     isPaused: false,
-    isInitialized: false
+    isInitialized: false,
+    initializationFailed: false
   });
   
   const match = matches.find(m => m.id === id);
@@ -63,18 +107,29 @@ export default function AIInsightsScreen() {
     }
   });
   
-  // Initialize Speech module safely
+  // Initialize Speech module safely with proper error handling
   useEffect(() => {
     const initSpeech = async () => {
       try {
-        await initializeSpeech();
-        setTtsState(prev => ({ ...prev, isInitialized: true }));
+        const success = await initializeSpeechSafely();
+        setTtsState(prev => ({ 
+          ...prev, 
+          isInitialized: success,
+          initializationFailed: !success
+        }));
       } catch (error) {
         console.warn('Speech initialization failed:', error);
+        setTtsState(prev => ({ 
+          ...prev, 
+          isInitialized: false,
+          initializationFailed: true
+        }));
       }
     };
     
-    initSpeech();
+    // Delay initialization to avoid startup crashes
+    const timer = setTimeout(initSpeech, 3000);
+    return () => clearTimeout(timer);
   }, []);
   
   if (!match) {
@@ -364,8 +419,18 @@ export default function AIInsightsScreen() {
       return;
     }
 
-    if (!ttsState.isInitialized || !Speech) {
-      Alert.alert('Audio Not Ready', 'Text-to-speech is still initializing. Please try again in a moment.');
+    if (ttsState.initializationFailed) {
+      Alert.alert('Audio Not Available', 'Text-to-speech is not available on this device, but your incredible insights are ready to read!');
+      return;
+    }
+
+    if (!ttsState.isInitialized) {
+      Alert.alert('Audio Loading', 'Text-to-speech is still loading. Please try again in a moment.');
+      return;
+    }
+
+    if (!Speech) {
+      Alert.alert('Audio Not Ready', 'Text-to-speech is not ready yet. Please try again in a moment.');
       return;
     }
 
@@ -629,6 +694,17 @@ export default function AIInsightsScreen() {
       );
     }
 
+    if (ttsState.initializationFailed) {
+      return (
+        <View style={styles.webTTSMessage}>
+          <Volume2 size={20} color={Colors.textSecondary} />
+          <Text style={styles.webTTSText}>
+            🎧 Audio coaching not available on this device
+          </Text>
+        </View>
+      );
+    }
+
     if (!ttsState.isInitialized) {
       return (
         <View style={styles.webTTSMessage}>
@@ -705,7 +781,7 @@ export default function AIInsightsScreen() {
   };
 
   const renderSectionTTSButton = (sectionName: string, items: string[], title: string) => {
-    if (Platform.OS === 'web' || !ttsState.isInitialized) {
+    if (Platform.OS === 'web' || !ttsState.isInitialized || ttsState.initializationFailed) {
       return null;
     }
 
