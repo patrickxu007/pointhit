@@ -33,19 +33,13 @@ const getBaseUrl = () => {
   );
 };
 
-// Create a compatible timeout function for React Native
-const createTimeoutSignal = (timeoutMs: number): AbortSignal => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
-  
-  // Clean up timeout if the signal is aborted for other reasons
-  controller.signal.addEventListener('abort', () => {
-    clearTimeout(timeoutId);
+// Create a timeout function for React Native without generators
+const createTimeoutPromise = (timeoutMs: number): Promise<never> => {
+  return new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error('Request timeout'));
+    }, timeoutMs);
   });
-  
-  return controller.signal;
 };
 
 // Enhanced fetch function with better error handling and proper typing
@@ -53,15 +47,21 @@ const enhancedFetch = async (input: RequestInfo | URL, options?: RequestInit): P
   try {
     console.log('Making TRPC request to:', typeof input === 'string' ? input : input.toString());
     
-    const response = await fetch(input, {
+    // Create timeout promise
+    const timeoutPromise = createTimeoutPromise(45000); // 45 second timeout
+    
+    // Create fetch promise
+    const fetchPromise = fetch(input, {
       ...options,
-      signal: createTimeoutSignal(45000), // 45 second timeout for better reliability
       headers: {
         ...options?.headers,
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
     });
+
+    // Race between fetch and timeout
+    const response = await Promise.race([fetchPromise, timeoutPromise]);
 
     console.log('TRPC response status:', response.status);
     console.log('TRPC response headers:', Object.fromEntries(response.headers.entries()));
@@ -86,7 +86,7 @@ const enhancedFetch = async (input: RequestInfo | URL, options?: RequestInit): P
   } catch (error) {
     console.error('Enhanced fetch error:', error);
     if (error instanceof Error) {
-      if (error.name === 'AbortError') {
+      if (error.message === 'Request timeout') {
         throw new Error('Request timed out. Please check your internet connection and try again.');
       }
       if (error.message.includes('Network request failed')) {

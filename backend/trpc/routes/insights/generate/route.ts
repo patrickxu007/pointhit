@@ -241,7 +241,11 @@ function parseAIResponse(rawResponse: string) {
       // Split by lines and look for numbered items
       const lines = sectionText.split('\n').map(line => line.trim());
       
-      for (const line of lines) {
+      // Process each line sequentially
+      let currentIndex = 0;
+      while (currentIndex < lines.length) {
+        const line = lines[currentIndex];
+        
         // Match patterns like "1.", "2.", "3.", "1)", "2)", "3)", etc.
         const numberedMatch = line.match(/^(\d+)[\.\)]\s*(.+)$/);
         if (numberedMatch && numberedMatch[2]) {
@@ -262,6 +266,8 @@ function parseAIResponse(rawResponse: string) {
             }
           }
         }
+        
+        currentIndex++;
       }
       
       // Enhanced filtering to remove empty items and emoji-only content
@@ -283,7 +289,10 @@ function parseAIResponse(rawResponse: string) {
     // Split the response into sections
     const sections = cleanedResponse.split(/(?=(?:What (?:Went )?Well|Areas? (?:to )?Improve|Suggested? Drills?|Training|Overall|Final|Opening Statement))/gi);
     
-    for (const section of sections) {
+    // Process each section sequentially
+    let sectionIndex = 0;
+    while (sectionIndex < sections.length) {
+      const section = sections[sectionIndex];
       const sectionLower = section.toLowerCase();
       
       if (sectionLower.includes('what went well') || sectionLower.includes('what you did well')) {
@@ -301,14 +310,19 @@ function parseAIResponse(rawResponse: string) {
       else if (sectionLower.includes('overall') || sectionLower.includes('final') || sectionLower.includes('assessment') || sectionLower.includes('opening statement')) {
         // For overall assessment, take the first substantial paragraph and clean it - no length limits
         const lines = section.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-        for (const line of lines) {
+        let lineIndex = 0;
+        while (lineIndex < lines.length) {
+          const line = lines[lineIndex];
           // Accept any length content - no minimum requirements
           if (line.length > 0 && !line.toLowerCase().includes('overall') && !line.toLowerCase().includes('final') && !line.toLowerCase().includes('opening statement')) {
             insights.overallAssessment = cleanText(line);
             break;
           }
+          lineIndex++;
         }
       }
+      
+      sectionIndex++;
     }
 
     // Alternative parsing if the structured approach didn't work - no length limits
@@ -319,21 +333,27 @@ function parseAIResponse(rawResponse: string) {
       const allLines = cleanedResponse.split('\n').map(line => line.trim());
       let currentSection = '';
       
-      for (const line of allLines) {
+      let lineIndex = 0;
+      while (lineIndex < allLines.length) {
+        const line = allLines[lineIndex];
         const lineLower = line.toLowerCase();
         
         // Detect section headers
         if (lineLower.includes('what went well') || lineLower.includes('what you did well')) {
           currentSection = 'well';
+          lineIndex++;
           continue;
         } else if (lineLower.includes('areas to improve') || lineLower.includes('improvement')) {
           currentSection = 'improve';
+          lineIndex++;
           continue;
         } else if (lineLower.includes('drill') || lineLower.includes('training') || lineLower.includes('practice')) {
           currentSection = 'training';
+          lineIndex++;
           continue;
         } else if (lineLower.includes('overall') || lineLower.includes('final') || lineLower.includes('opening statement')) {
           currentSection = 'overall';
+          lineIndex++;
           continue;
         }
         
@@ -394,6 +414,8 @@ function parseAIResponse(rawResponse: string) {
             insights.overallAssessment = cleanText(line);
           }
         }
+        
+        lineIndex++;
       }
     }
 
