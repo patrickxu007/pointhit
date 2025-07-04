@@ -8,6 +8,8 @@
     "start-web-dev": "DEBUG=expo* expo start --web --tunnel"
   },
   "dependencies": {
+    "@babel/plugin-proposal-async-generator-functions": "^7.20.7",
+    "@babel/plugin-transform-async-generator-functions": "^7.28.0",
     "@expo/vector-icons": "^14.1.0",
     "@hono/trpc-server": "^0.3.4",
     "@react-native-async-storage/async-storage": "2.1.2",
@@ -17,6 +19,7 @@
     "@trpc/client": "^11.4.0",
     "@trpc/react-query": "^11.4.0",
     "@trpc/server": "^11.4.0",
+    "babel-preset-expo": "^13.2.3",
     "expo": "^53.0.9",
     "expo-blur": "~14.1.4",
     "expo-constants": "~17.1.6",
