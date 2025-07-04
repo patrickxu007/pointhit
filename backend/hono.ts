@@ -7,7 +7,7 @@ import { createContext } from "./trpc/create-context";
 // app will be mounted at /api
 const app = new Hono();
 
-// Enable CORS for all routes with more permissive settings
+// Enable CORS for all routes with more permissive settings for development
 app.use("*", cors({
   origin: "*",
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -15,17 +15,15 @@ app.use("*", cors({
   credentials: false,
 }));
 
-// Add request logging middleware
+// Add request logging middleware (less verbose for QR code scanning)
 app.use("*", async (c, next) => {
   console.log(`${c.req.method} ${c.req.url}`);
-  console.log('Headers:', c.req.header());
   await next();
 });
 
 // Global error handler to ensure JSON responses
 app.onError((err, c) => {
-  console.error('Server error:', err);
-  console.error('Error stack:', err.stack);
+  console.error('Server error:', err.message);
   
   // Always return JSON, never HTML
   return c.json({ 
@@ -33,8 +31,6 @@ app.onError((err, c) => {
     message: err.message,
     timestamp: new Date().toISOString(),
     success: false,
-    path: c.req.path,
-    method: c.req.method,
   }, 500);
 });
 
@@ -45,10 +41,8 @@ app.use(
     endpoint: "/api/trpc",
     router: appRouter,
     createContext,
-    onError: ({ error, path, input }) => {
-      console.error(`tRPC Error on ${path}:`, error);
-      console.error('Input:', input);
-      console.error('Error stack:', error.stack);
+    onError: ({ error, path }) => {
+      console.error(`tRPC Error on ${path}:`, error.message);
     },
     responseMeta: () => {
       return {
@@ -65,10 +59,9 @@ app.use(
 app.get("/", (c) => {
   return c.json({ 
     status: "ok", 
-    message: "API is running",
+    message: "PointHit API is running",
     timestamp: new Date().toISOString(),
     success: true,
-    version: "1.0.0",
   });
 });
 
@@ -79,24 +72,17 @@ app.get("/trpc", (c) => {
     message: "tRPC endpoint is available",
     timestamp: new Date().toISOString(),
     success: true,
-    endpoint: "/api/trpc",
   });
 });
 
 // Catch-all route to return JSON instead of HTML
 app.all("*", (c) => {
-  console.log(`404 - Route not found: ${c.req.method} ${c.req.path}`);
   return c.json({ 
     error: "Not found", 
     path: c.req.path,
     method: c.req.method,
     timestamp: new Date().toISOString(),
     success: false,
-    availableEndpoints: [
-      "GET /api/",
-      "GET /api/trpc",
-      "POST /api/trpc/*",
-    ],
   }, 404);
 });
 

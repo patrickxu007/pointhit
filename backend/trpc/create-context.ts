@@ -4,8 +4,6 @@ import superjson from "superjson";
 
 // Context creation function
 export const createContext = async (opts: FetchCreateContextFnOptions) => {
-  console.log('Creating tRPC context for:', opts.req.method, opts.req.url);
-  
   return {
     req: opts.req,
     // You can add more context items here like database connections, auth, etc.
@@ -14,11 +12,10 @@ export const createContext = async (opts: FetchCreateContextFnOptions) => {
 
 export type Context = Awaited<ReturnType<typeof createContext>>;
 
-// Initialize tRPC with enhanced error handling
+// Initialize tRPC with simplified error handling
 const t = initTRPC.context<Context>().create({
   transformer: superjson,
   errorFormatter: ({ shape, error }) => {
-    console.error('tRPC Error:', error);
     return {
       ...shape,
       data: {

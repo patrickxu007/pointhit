@@ -6,7 +6,6 @@ import { View, Text, ActivityIndicator, Platform } from "react-native";
 import Colors from "@/constants/colors";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trpc, trpcReactClient } from "@/lib/trpc";
-import { NetworkStatus } from "@/components/NetworkStatus";
 
 export const unstable_settings = {
   initialRouteName: "(tabs)",
@@ -15,15 +14,15 @@ export const unstable_settings = {
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Create a client with optimized settings for mobile
+// Create a client with optimized settings for mobile and QR code scanning
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      retry: 0, // Don't retry during initialization to prevent QR code scanning issues
       staleTime: 5 * 60 * 1000, // 5 minutes
-      refetchOnWindowFocus: false, // Prevent unnecessary refetches on mobile
-      refetchOnMount: false, // Don't refetch on component mount during initialization
-      networkMode: 'offlineFirst', // Handle offline scenarios gracefully
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      networkMode: 'offlineFirst',
     },
     mutations: {
       networkMode: 'offlineFirst',
@@ -37,25 +36,21 @@ export default function RootLayout() {
   useEffect(() => {
     async function prepare() {
       try {
-        // Minimal initialization - remove delays that cause QR code scanning issues
+        // Minimal initialization to prevent QR code scanning issues
         console.log('Initializing PointHit app...');
         
-        // iOS-specific initialization to prevent TTS crashes
-        if (Platform.OS === 'ios') {
-          try {
-            // Don't preload expo-speech during app initialization
-            // This was causing TurboModule crashes on iOS
-            console.log('iOS detected - TTS will be initialized when needed');
-          } catch (error) {
-            console.warn('iOS initialization warning:', error);
-          }
-        }
+        // Don't do any network calls or heavy initialization during QR code scanning
+        // Just mark as ready immediately
+        setIsReady(true);
       } catch (e) {
         console.warn('Error during app initialization:', e);
-      } finally {
+        // Even if there's an error, mark as ready to prevent QR code scanning issues
         setIsReady(true);
-        // Hide splash screen after state is ready
-        SplashScreen.hideAsync().catch(console.warn);
+      } finally {
+        // Hide splash screen after minimal delay
+        setTimeout(() => {
+          SplashScreen.hideAsync().catch(console.warn);
+        }, 100);
       }
     }
 
@@ -87,7 +82,6 @@ export default function RootLayout() {
     <trpc.Provider client={trpcReactClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
         <StatusBar style="dark" />
-        <NetworkStatus />
         <Stack
           screenOptions={{
             headerBackTitle: "Back",

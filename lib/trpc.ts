@@ -6,52 +6,28 @@ import superjson from "superjson";
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  // For development, try multiple possible URLs
+  // For development, use a safe fallback that won't block app initialization
   if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
-    console.log('Using configured API base URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
     return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   }
   
-  // Fallback URLs for development - don't throw errors during QR code scanning
-  if (__DEV__) {
-    // Use a safe fallback that won't block app initialization
-    const fallbackUrl = 'http://localhost:3000';
-    console.log(
-      'EXPO_PUBLIC_RORK_API_BASE_URL not set. Using fallback:',
-      fallbackUrl,
-      '\nTo fix this, create a .env file with EXPO_PUBLIC_RORK_API_BASE_URL=your_server_url'
-    );
-    
-    return fallbackUrl;
-  }
-
-  // For production, we need the environment variable
-  throw new Error(
-    "No base url found. Please set EXPO_PUBLIC_RORK_API_BASE_URL environment variable."
-  );
+  // Safe fallback for development - don't throw errors during QR code scanning
+  const fallbackUrl = 'http://localhost:3000';
+  console.log('Using fallback API URL:', fallbackUrl);
+  
+  return fallbackUrl;
 };
 
-// Create a timeout function for React Native without generators
-const createTimeoutPromise = (timeoutMs: number): Promise<never> => {
-  return new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error('Request timeout'));
-    }, timeoutMs);
-  });
-};
-
-// Enhanced fetch function with better error handling and proper typing
+// Simplified fetch function that won't block app initialization
 const enhancedFetch = async (input: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
   try {
-    const url = typeof input === 'string' ? input : input.toString();
-    console.log('Making TRPC request to:', url);
+    // Much shorter timeout to prevent QR code scanning issues
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
     
-    // Create timeout promise - shorter timeout to prevent QR code scanning issues
-    const timeoutPromise = createTimeoutPromise(15000); // 15 second timeout
-    
-    // Create fetch promise
-    const fetchPromise = fetch(input, {
+    const response = await fetch(input, {
       ...options,
+      signal: controller.signal,
       headers: {
         ...options?.headers,
         'Content-Type': 'application/json',
@@ -59,40 +35,12 @@ const enhancedFetch = async (input: RequestInfo | URL, options?: RequestInit): P
       },
     });
 
-    // Race between fetch and timeout
-    const response = await Promise.race([fetchPromise, timeoutPromise]);
-
-    console.log('TRPC response status:', response.status);
-
-    // Check if response is HTML (error page) instead of JSON
-    const contentType = response.headers.get('content-type');
-    if (contentType && !contentType.includes('application/json')) {
-      console.error('Server returned non-JSON response:', contentType);
-      const text = await response.text();
-      console.error('Response body:', text.substring(0, 200));
-      throw new Error(`Server returned ${contentType} instead of JSON. This usually indicates a server error.`);
-    }
-
-    // Log response for debugging
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('TRPC error response:', errorText);
-      throw new Error(`HTTP ${response.status}: ${errorText}`);
-    }
-
+    clearTimeout(timeoutId);
     return response;
   } catch (error) {
-    console.error('Enhanced fetch error:', error);
-    if (error instanceof Error) {
-      if (error.message === 'Request timeout') {
-        throw new Error('Request timed out. Please check your internet connection and try again.');
-      }
-      if (error.message.includes('Network request failed')) {
-        throw new Error('Network connection failed. Please check your internet connection.');
-      }
-      if (error.message.includes('Failed to fetch')) {
-        throw new Error('Unable to connect to server. Please check if the server is running.');
-      }
+    // Don't log verbose errors during QR code scanning - just fail silently
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Request timeout');
     }
     throw error;
   }
