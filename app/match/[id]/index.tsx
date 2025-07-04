@@ -1700,7 +1700,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   rallyStatValue: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.primary,
     marginBottom: 4,

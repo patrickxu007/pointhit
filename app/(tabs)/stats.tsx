@@ -859,7 +859,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary + '30',
   },
   rallyStatValue: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.primary,
     marginBottom: 4,
