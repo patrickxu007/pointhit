@@ -52,10 +52,6 @@ module.exports = {
       typedRoutes: true
     },
     scheme: "pointhit",
-    extra: {
-      eas: {
-        projectId: "your-project-id-here"
-      }
-    }
+
   }
 };
