@@ -6,12 +6,24 @@ import Colors from '@/constants/colors';
 import { Brain, CheckCircle, Target, TrendingUp, RefreshCw, Play, Pause, Square, Volume2, Wifi, WifiOff, MessageCircle } from 'lucide-react-native';
 import { Match, Point, Game, Set, ErrorType, ShotType, TiebreakPoint, MentalPhysicalState, formatEnumValue, calculateRallyLengthStats } from '@/types/tennis';
 import { trpc } from '@/lib/trpc';
-import * as Speech from 'expo-speech';
+
+// Lazy import Speech to prevent initialization issues
+let Speech: any = null;
+const initializeSpeech = async () => {
+  if (Platform.OS !== 'web' && !Speech) {
+    try {
+      Speech = await import('expo-speech');
+    } catch (error) {
+      console.warn('Failed to initialize Speech module:', error);
+    }
+  }
+};
 
 interface TTSState {
   isPlaying: boolean;
   currentSection: string | null;
   isPaused: boolean;
+  isInitialized: boolean;
 }
 
 interface ParsedInsights {
@@ -30,7 +42,8 @@ export default function AIInsightsScreen() {
   const [ttsState, setTtsState] = useState<TTSState>({
     isPlaying: false,
     currentSection: null,
-    isPaused: false
+    isPaused: false,
+    isInitialized: false
   });
   
   const match = matches.find(m => m.id === id);
@@ -49,6 +62,20 @@ export default function AIInsightsScreen() {
       setNetworkError(null);
     }
   });
+  
+  // Initialize Speech module safely
+  useEffect(() => {
+    const initSpeech = async () => {
+      try {
+        await initializeSpeech();
+        setTtsState(prev => ({ ...prev, isInitialized: true }));
+      } catch (error) {
+        console.warn('Speech initialization failed:', error);
+      }
+    };
+    
+    initSpeech();
+  }, []);
   
   if (!match) {
     return (
@@ -225,22 +252,23 @@ export default function AIInsightsScreen() {
 
   // Enhanced TTS Functions with super warm, engaging, lively personality
   const stopTTS = async () => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== 'web' && Speech && ttsState.isInitialized) {
       try {
         await Speech.stop();
       } catch (error) {
         console.warn('Error stopping TTS:', error);
       }
     }
-    setTtsState({
+    setTtsState(prev => ({
+      ...prev,
       isPlaying: false,
       currentSection: null,
       isPaused: false
-    });
+    }));
   };
 
   const pauseTTS = async () => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== 'web' && Speech && ttsState.isInitialized) {
       try {
         await Speech.pause();
         setTtsState(prev => ({ ...prev, isPaused: true, isPlaying: false }));
@@ -252,7 +280,7 @@ export default function AIInsightsScreen() {
   };
 
   const resumeTTS = async () => {
-    if (Platform.OS !== 'web') {
+    if (Platform.OS !== 'web' && Speech && ttsState.isInitialized) {
       try {
         await Speech.resume();
         setTtsState(prev => ({ ...prev, isPaused: false, isPlaying: true }));
@@ -336,15 +364,21 @@ export default function AIInsightsScreen() {
       return;
     }
 
+    if (!ttsState.isInitialized || !Speech) {
+      Alert.alert('Audio Not Ready', 'Text-to-speech is still initializing. Please try again in a moment.');
+      return;
+    }
+
     try {
       // Stop any current speech
       await stopTTS();
       
-      setTtsState({
+      setTtsState(prev => ({
+        ...prev,
         isPlaying: true,
         currentSection: sectionName,
         isPaused: false
-      });
+      }));
 
       // Add super warm, lively personality to the text
       const enhancedText = addSuperWarmPersonalityToText(text, sectionName);
@@ -354,30 +388,33 @@ export default function AIInsightsScreen() {
         pitch: 1.2, // Higher pitch for more energy and warmth
         rate: 0.85, // Slightly slower for clarity but still lively
         onDone: () => {
-          setTtsState({
+          setTtsState(prev => ({
+            ...prev,
             isPlaying: false,
             currentSection: null,
             isPaused: false
-          });
+          }));
         },
-        onError: (error) => {
+        onError: (error: any) => {
           console.warn('TTS Error:', error);
-          setTtsState({
+          setTtsState(prev => ({
+            ...prev,
             isPlaying: false,
             currentSection: null,
             isPaused: false
-          });
+          }));
           Alert.alert('Audio Hiccup', 'Oops! Had a little trouble with the audio. Your amazing insights are still here to read though!');
         }
       });
     } catch (error) {
       console.error('TTS Error:', error);
       Alert.alert('Audio Not Available', 'Having trouble with audio right now, but your incredible insights are ready to read!');
-      setTtsState({
+      setTtsState(prev => ({
+        ...prev,
         isPlaying: false,
         currentSection: null,
         isPaused: false
-      });
+      }));
     }
   };
 
@@ -540,21 +577,26 @@ export default function AIInsightsScreen() {
     }
   };
 
-  // Auto-generate insights if they don't exist
+  // Only auto-generate insights if they don't exist and the component is fully mounted
   useEffect(() => {
-    if (!match.aiInsights && !isGeneratingInsights && !generateInsightsMutation.isPending) {
-      generateAIInsights();
-    }
-  }, []);
+    // Add a delay to prevent initialization issues
+    const timer = setTimeout(() => {
+      if (!match.aiInsights && !isGeneratingInsights && !generateInsightsMutation.isPending) {
+        generateAIInsights();
+      }
+    }, 1000); // 1 second delay
+
+    return () => clearTimeout(timer);
+  }, [match.id]); // Only depend on match.id to prevent unnecessary re-runs
 
   // Cleanup TTS on unmount
   useEffect(() => {
     return () => {
-      if (Platform.OS !== 'web') {
+      if (Platform.OS !== 'web' && Speech && ttsState.isInitialized) {
         Speech.stop().catch(console.warn);
       }
     };
-  }, []);
+  }, [ttsState.isInitialized]);
 
   const renderNetworkError = () => {
     if (!networkError) return null;
@@ -582,6 +624,17 @@ export default function AIInsightsScreen() {
           <Volume2 size={20} color={Colors.textSecondary} />
           <Text style={styles.webTTSText}>
             🎧 Super enthusiastic audio coaching available on mobile app
+          </Text>
+        </View>
+      );
+    }
+
+    if (!ttsState.isInitialized) {
+      return (
+        <View style={styles.webTTSMessage}>
+          <Volume2 size={20} color={Colors.textSecondary} />
+          <Text style={styles.webTTSText}>
+            🎧 Initializing audio coaching...
           </Text>
         </View>
       );
@@ -652,7 +705,7 @@ export default function AIInsightsScreen() {
   };
 
   const renderSectionTTSButton = (sectionName: string, items: string[], title: string) => {
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' || !ttsState.isInitialized) {
       return null;
     }
 

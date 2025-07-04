@@ -2,7 +2,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { StatusBar } from "expo-status-bar";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator, Platform } from "react-native";
 import Colors from "@/constants/colors";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trpc, trpcReactClient } from "@/lib/trpc";
@@ -31,7 +31,17 @@ export default function RootLayout() {
     async function prepare() {
       try {
         // Add any initialization logic here
-        await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure everything is loaded
+        await new Promise(resolve => setTimeout(resolve, 500)); // Increased delay to ensure everything is loaded
+        
+        // Pre-initialize critical modules on iOS to prevent crashes
+        if (Platform.OS === 'ios') {
+          try {
+            // Pre-load expo-speech module to prevent TurboModule crashes
+            await import('expo-speech');
+          } catch (error) {
+            console.warn('Failed to pre-load expo-speech:', error);
+          }
+        }
       } catch (e) {
         console.warn('Error during app initialization:', e);
       } finally {

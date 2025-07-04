@@ -15,7 +15,9 @@ module.exports = {
       supportsTablet: true,
       infoPlist: {
         NSCameraUsageDescription: "PointHit needs access to your camera to take profile pictures for players.",
-        NSPhotoLibraryUsageDescription: "PointHit needs access to your photo library to select profile pictures for players."
+        NSPhotoLibraryUsageDescription: "PointHit needs access to your photo library to select profile pictures for players.",
+        NSSpeechRecognitionUsageDescription: "PointHit uses speech recognition for enhanced text-to-speech functionality.",
+        NSMicrophoneUsageDescription: "PointHit may use the microphone for speech recognition features."
       }
     },
     android: {
@@ -26,7 +28,8 @@ module.exports = {
       permissions: [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO"
       ]
     },
     web: {
