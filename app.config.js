@@ -30,7 +30,9 @@ module.exports = {
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
       ],
       package: "app.rork.pointhit"
     },
@@ -52,6 +54,9 @@ module.exports = {
       typedRoutes: true
     },
     scheme: "pointhit",
-
+    extra: {
+      // Environment variables for production builds
+      apiBaseUrl: process.env.EXPO_PUBLIC_RORK_API_BASE_URL || null,
+    }
   }
 };

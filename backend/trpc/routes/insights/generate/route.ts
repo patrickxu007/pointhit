@@ -415,7 +415,7 @@ export const generateInsightsProcedure = publicProcedure
   .mutation(async ({ input }: { input: { matchData: z.infer<typeof MatchDataSchema> } }) => {
     const { matchData } = input;
     
-    console.log('Generating insights for match:', matchData.playerName, 'vs', matchData.opponentName);
+    console.log(`[${new Date().toISOString()}] Generating insights for match:`, matchData.playerName, 'vs', matchData.opponentName);
     
     // Log if match comments are included
     if (matchData.comments && matchData.comments.trim().length > 0) {
@@ -454,37 +454,45 @@ export const generateInsightsProcedure = publicProcedure
         }
       };
 
-      console.log('Making request to AI service with payload including match comments');
+      console.log(`[${new Date().toISOString()}] Making request to AI service with payload including match comments`);
 
-      // Make request to AI service with proper headers and JSON payload
+      // Enhanced fetch with better error handling for production
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for AI service
+
       const response = await fetch('https://pointhit.com/tennis-insights', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          'User-Agent': 'PointHit-App/1.0',
+          'User-Agent': 'PointHit-App/1.3.3',
+          'X-Client-Platform': 'mobile',
+          'X-Request-Source': 'production',
         },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
 
-      console.log('AI service response status:', response.status);
-      console.log('AI service response headers:', Object.fromEntries(response.headers.entries()));
+      clearTimeout(timeoutId);
+
+      console.log(`[${new Date().toISOString()}] AI service response status:`, response.status);
+      console.log(`[${new Date().toISOString()}] AI service response headers:`, Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`AI service responded with status: ${response.status}`, errorText);
+        console.error(`[${new Date().toISOString()}] AI service responded with status: ${response.status}`, errorText);
         throw new Error(`AI service responded with status: ${response.status}: ${errorText}`);
       }
 
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         const responseText = await response.text();
-        console.error('AI service returned non-JSON response:', contentType, responseText.substring(0, 500));
+        console.error(`[${new Date().toISOString()}] AI service returned non-JSON response:`, contentType, responseText.substring(0, 500));
         throw new Error(`AI service returned ${contentType} instead of JSON`);
       }
 
       const aiResult = await response.json();
-      console.log('AI service response received:', !!aiResult.insights);
+      console.log(`[${new Date().toISOString()}] AI service response received:`, !!aiResult.insights);
       
       if (aiResult.insights) {
         // Parse the AI response using the enhanced parser - no length limits
@@ -503,7 +511,7 @@ export const generateInsightsProcedure = publicProcedure
 
         // Fallback to generated insights if parsing failed - no length restrictions
         if (insights.whatYouDidWell.length === 0 || insights.areasToImprove.length === 0) {
-          console.log('AI parsing failed, using fallback insights');
+          console.log(`[${new Date().toISOString()}] AI parsing failed, using fallback insights`);
           const fallbackInsights = generateFallbackInsights(matchData);
           return {
             success: true,
@@ -515,7 +523,7 @@ export const generateInsightsProcedure = publicProcedure
           };
         }
 
-        console.log('Successfully generated AI insights with match comments included');
+        console.log(`[${new Date().toISOString()}] Successfully generated AI insights with match comments included`);
         return {
           success: true,
           insights
@@ -524,14 +532,33 @@ export const generateInsightsProcedure = publicProcedure
         throw new Error('No insights in AI response');
       }
     } catch (error) {
-      console.error('AI insights generation failed:', error);
+      console.error(`[${new Date().toISOString()}] AI insights generation failed:`, {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : undefined,
+      });
+      
+      // Enhanced error handling for different types of failures
+      let errorMessage = 'AI service unavailable, using PointHit analysis';
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = 'AI service timeout, using PointHit analysis';
+        } else if (error.message.includes('Network request failed')) {
+          errorMessage = 'Network connection failed, using PointHit analysis';
+        } else if (error.message.includes('JSON Parse error')) {
+          errorMessage = 'AI service returned invalid response, using PointHit analysis';
+        } else if (error.message.includes('fetch')) {
+          errorMessage = 'Unable to connect to AI service, using PointHit analysis';
+        }
+      }
       
       // Return fallback insights - no length restrictions
       const fallbackInsights = generateFallbackInsights(matchData);
       return {
         success: false,
         insights: fallbackInsights,
-        error: error instanceof Error ? error.message : 'AI service unavailable, using PointHit analysis'
+        error: errorMessage
       };
     }
   });

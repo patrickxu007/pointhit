@@ -2,28 +2,41 @@ import { createTRPCReact } from "@trpc/react-query";
 import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "@/backend/trpc/app-router";
 import superjson from "superjson";
+import { Platform } from "react-native";
 
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  // For development, use a safe fallback that won't block app initialization
+  // For production builds, use the environment variable or a production URL
   if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
+    console.log('Using configured API URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
     return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   }
   
-  // Safe fallback for development - don't throw errors during QR code scanning
-  const fallbackUrl = 'http://localhost:3000';
-  console.log('Using fallback API URL:', fallbackUrl);
+  // For development, try to detect the environment
+  if (__DEV__) {
+    // In development, use localhost
+    const devUrl = 'http://localhost:3000';
+    console.log('Using development API URL:', devUrl);
+    return devUrl;
+  }
   
-  return fallbackUrl;
+  // For production builds without environment variable, use a production-ready URL
+  // This should be replaced with your actual production backend URL
+  const productionUrl = 'https://api.pointhit.com'; // Replace with your actual production URL
+  console.log('Using production fallback API URL:', productionUrl);
+  return productionUrl;
 };
 
-// Simplified fetch function that won't block app initialization
+// Enhanced fetch function with better error handling for production
 const enhancedFetch = async (input: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
   try {
-    // Much shorter timeout to prevent QR code scanning issues
+    // Longer timeout for production builds
+    const timeoutMs = __DEV__ ? 5000 : 15000;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    
+    console.log('Making request to:', input);
     
     const response = await fetch(input, {
       ...options,
@@ -32,16 +45,37 @@ const enhancedFetch = async (input: RequestInfo | URL, options?: RequestInit): P
         ...options?.headers,
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'User-Agent': Platform.select({
+          ios: 'PointHit-iOS/1.3.3',
+          android: 'PointHit-Android/1.3.3',
+          default: 'PointHit-App/1.3.3'
+        }),
       },
     });
 
     clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      console.error('HTTP Error:', response.status, response.statusText);
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
     return response;
   } catch (error) {
-    // Don't log verbose errors during QR code scanning - just fail silently
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Request timeout');
+    console.error('Network request failed:', error);
+    
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout - please check your internet connection');
+      }
+      if (error.message.includes('Network request failed')) {
+        throw new Error('Unable to connect to server - please check your internet connection');
+      }
+      if (error.message.includes('JSON Parse error')) {
+        throw new Error('Server returned invalid response');
+      }
     }
+    
     throw error;
   }
 };
@@ -56,6 +90,8 @@ export const trpcReactClient = trpc.createClient({
       headers: () => ({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'X-Client-Platform': Platform.OS,
+        'X-Client-Version': '1.3.3',
       }),
     }),
   ],
@@ -71,6 +107,8 @@ export const trpcClient = createTRPCProxyClient<AppRouter>({
       headers: () => ({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'X-Client-Platform': Platform.OS,
+        'X-Client-Version': '1.3.3',
       }),
     }),
   ],

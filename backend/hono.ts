@@ -7,30 +7,77 @@ import { createContext } from "./trpc/create-context";
 // app will be mounted at /api
 const app = new Hono();
 
-// Enable CORS for all routes with more permissive settings for development
+// Enhanced CORS configuration for production
 app.use("*", cors({
-  origin: "*",
+  origin: (origin) => {
+    // Allow all origins in development
+    if (process.env.NODE_ENV === 'development') {
+      return origin || "*";
+    }
+    
+    // In production, allow specific origins
+    const allowedOrigins = [
+      "https://pointhit.com",
+      "https://api.pointhit.com",
+      "https://app.pointhit.com",
+      // Add your production domains here
+    ];
+    
+    // Allow mobile app requests (they don't send origin header)
+    if (!origin) {
+      return true;
+    }
+    
+    return allowedOrigins.includes(origin) ? origin : false;
+  },
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization", "Accept"],
+  allowHeaders: [
+    "Content-Type", 
+    "Authorization", 
+    "Accept",
+    "X-Client-Platform",
+    "X-Client-Version",
+    "User-Agent"
+  ],
   credentials: false,
+  maxAge: 86400, // 24 hours
 }));
 
-// Add request logging middleware (less verbose for QR code scanning)
+// Add request logging middleware with better production logging
 app.use("*", async (c, next) => {
-  console.log(`${c.req.method} ${c.req.url}`);
+  const start = Date.now();
+  const method = c.req.method;
+  const url = c.req.url;
+  const userAgent = c.req.header('User-Agent') || 'Unknown';
+  const clientPlatform = c.req.header('X-Client-Platform') || 'Unknown';
+  
+  console.log(`[${new Date().toISOString()}] ${method} ${url} - Platform: ${clientPlatform} - UA: ${userAgent}`);
+  
   await next();
+  
+  const duration = Date.now() - start;
+  console.log(`[${new Date().toISOString()}] ${method} ${url} - ${c.res.status} - ${duration}ms`);
 });
 
-// Global error handler to ensure JSON responses
+// Global error handler with enhanced error information
 app.onError((err, c) => {
-  console.error('Server error:', err.message);
-  
-  // Always return JSON, never HTML
-  return c.json({ 
-    error: 'Internal server error', 
+  console.error(`[${new Date().toISOString()}] Server error:`, {
     message: err.message,
+    stack: err.stack,
+    url: c.req.url,
+    method: c.req.method,
+    headers: Object.fromEntries(c.req.raw.headers.entries()),
+  });
+  
+  // Don't expose internal errors in production
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  return c.json({ 
+    error: isProduction ? 'Internal server error' : err.message,
+    message: isProduction ? 'Something went wrong. Please try again.' : err.message,
     timestamp: new Date().toISOString(),
     success: false,
+    ...(isProduction ? {} : { stack: err.stack }),
   }, 500);
 });
 
@@ -41,26 +88,34 @@ app.use(
     endpoint: "/api/trpc",
     router: appRouter,
     createContext,
-    onError: ({ error, path }) => {
-      console.error(`tRPC Error on ${path}:`, error.message);
+    onError: ({ error, path, input }) => {
+      console.error(`[${new Date().toISOString()}] tRPC Error on ${path}:`, {
+        message: error.message,
+        code: error.code,
+        input: input,
+        stack: error.stack,
+      });
     },
     responseMeta: () => {
       return {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache',
+          'X-Powered-By': 'PointHit-API',
         },
       };
     },
   })
 );
 
-// Simple health check endpoint
+// Enhanced health check endpoint
 app.get("/", (c) => {
   return c.json({ 
     status: "ok", 
     message: "PointHit API is running",
     timestamp: new Date().toISOString(),
+    version: "1.3.3",
+    environment: process.env.NODE_ENV || 'development',
     success: true,
   });
 });
@@ -71,17 +126,37 @@ app.get("/trpc", (c) => {
     status: "ok", 
     message: "tRPC endpoint is available",
     timestamp: new Date().toISOString(),
+    endpoint: "/api/trpc",
+    success: true,
+  });
+});
+
+// API status endpoint for debugging
+app.get("/status", (c) => {
+  return c.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    version: "1.3.3",
+    endpoints: {
+      health: "/api",
+      trpc: "/api/trpc",
+      status: "/api/status"
+    },
     success: true,
   });
 });
 
 // Catch-all route to return JSON instead of HTML
 app.all("*", (c) => {
+  console.log(`[${new Date().toISOString()}] 404 - ${c.req.method} ${c.req.path}`);
+  
   return c.json({ 
     error: "Not found", 
     path: c.req.path,
     method: c.req.method,
     timestamp: new Date().toISOString(),
+    availableEndpoints: ["/api", "/api/trpc", "/api/status"],
     success: false,
   }, 404);
 });

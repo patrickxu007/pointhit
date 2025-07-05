@@ -14,42 +14,73 @@ export const unstable_settings = {
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Create a client with optimized settings for mobile and QR code scanning
+// Create a client with optimized settings for mobile and production builds
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 0, // Don't retry during initialization to prevent QR code scanning issues
+      retry: (failureCount, error) => {
+        // Don't retry during initialization to prevent QR code scanning issues
+        if (!__DEV__) {
+          return failureCount < 2; // Retry once in production
+        }
+        return false; // No retries in development
+      },
       staleTime: 5 * 60 * 1000, // 5 minutes
       refetchOnWindowFocus: false,
       refetchOnMount: false,
       networkMode: 'offlineFirst',
+      // Enhanced error handling for production
+      onError: (error) => {
+        console.log('Query error:', error);
+      },
     },
     mutations: {
       networkMode: 'offlineFirst',
+      retry: (failureCount, error) => {
+        // Retry mutations in production for better reliability
+        if (!__DEV__) {
+          return failureCount < 1; // Retry once in production
+        }
+        return false; // No retries in development
+      },
+      onError: (error) => {
+        console.log('Mutation error:', error);
+      },
     },
   },
 });
 
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
 
   useEffect(() => {
     async function prepare() {
       try {
-        // Minimal initialization to prevent QR code scanning issues
-        console.log('Initializing PointHit app...');
+        console.log(`[${new Date().toISOString()}] Initializing PointHit app...`);
+        console.log(`[${new Date().toISOString()}] Platform: ${Platform.OS}`);
+        console.log(`[${new Date().toISOString()}] Environment: ${__DEV__ ? 'development' : 'production'}`);
         
-        // Don't do any network calls or heavy initialization during QR code scanning
+        // Log environment variables for debugging (only in development)
+        if (__DEV__) {
+          console.log(`[${new Date().toISOString()}] API Base URL:`, process.env.EXPO_PUBLIC_RORK_API_BASE_URL || 'not set');
+        }
+        
+        // Minimal initialization to prevent QR code scanning issues
         // Just mark as ready immediately
         setIsReady(true);
+        console.log(`[${new Date().toISOString()}] App initialization completed successfully`);
       } catch (e) {
-        console.warn('Error during app initialization:', e);
+        console.warn(`[${new Date().toISOString()}] Error during app initialization:`, e);
+        setInitError(e instanceof Error ? e.message : 'Unknown initialization error');
         // Even if there's an error, mark as ready to prevent QR code scanning issues
         setIsReady(true);
       } finally {
         // Hide splash screen after minimal delay
         setTimeout(() => {
-          SplashScreen.hideAsync().catch(console.warn);
+          SplashScreen.hideAsync().catch((error) => {
+            console.warn(`[${new Date().toISOString()}] Error hiding splash screen:`, error);
+          });
         }, 100);
       }
     }
@@ -74,6 +105,17 @@ export default function RootLayout() {
         }}>
           Loading PointHit...
         </Text>
+        {__DEV__ && initError && (
+          <Text style={{
+            marginTop: 8,
+            color: Colors.error,
+            fontSize: 12,
+            textAlign: 'center',
+            paddingHorizontal: 20,
+          }}>
+            Debug: {initError}
+          </Text>
+        )}
       </View>
     );
   }
