@@ -7,25 +7,23 @@ import { Platform } from "react-native";
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  // For production builds, use the environment variable or a production URL
+  // For production builds, use the environment variable
   if (process.env.EXPO_PUBLIC_RORK_API_BASE_URL) {
     console.log('Using configured API URL:', process.env.EXPO_PUBLIC_RORK_API_BASE_URL);
     return process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
   }
   
-  // For development, try to detect the environment
+  // For development, use localhost
   if (__DEV__) {
-    // In development, use localhost
     const devUrl = 'http://localhost:3000';
     console.log('Using development API URL:', devUrl);
     return devUrl;
   }
   
-  // For production builds without environment variable, use a production-ready URL
-  // This should be replaced with your actual production backend URL
-  const productionUrl = 'https://api.pointhit.com'; // Replace with your actual production URL
-  console.log('Using production fallback API URL:', productionUrl);
-  return productionUrl;
+  // Fallback for production builds without environment variable
+  const fallbackUrl = 'https://pointhit.com';
+  console.log('Using fallback production API URL:', fallbackUrl);
+  return fallbackUrl;
 };
 
 // Enhanced fetch function with better error handling for production
