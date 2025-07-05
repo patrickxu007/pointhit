@@ -29,10 +29,7 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       refetchOnMount: false,
       networkMode: 'offlineFirst',
-      // Enhanced error handling for production
-      onError: (error) => {
-        console.log('Query error:', error);
-      },
+
     },
     mutations: {
       networkMode: 'offlineFirst',
@@ -43,9 +40,7 @@ const queryClient = new QueryClient({
         }
         return false; // No retries in development
       },
-      onError: (error) => {
-        console.log('Mutation error:', error);
-      },
+
     },
   },
 });

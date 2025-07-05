@@ -9,7 +9,7 @@ const app = new Hono();
 
 // Enhanced CORS configuration for production
 app.use("*", cors({
-  origin: (origin) => {
+  origin: (origin, c) => {
     // Allow all origins in development
     if (process.env.NODE_ENV === 'development') {
       return origin || "*";
@@ -25,10 +25,10 @@ app.use("*", cors({
     
     // Allow mobile app requests (they don't send origin header)
     if (!origin) {
-      return true;
+      return "*";
     }
     
-    return allowedOrigins.includes(origin) ? origin : false;
+    return allowedOrigins.includes(origin) ? origin : null;
   },
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowHeaders: [
