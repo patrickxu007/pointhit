@@ -181,6 +181,25 @@ export default function AIInsightsScreen() {
     }
   };
 
+  // Enhanced text cleaning function to remove all markdown formatting
+  const cleanMarkdownText = (text: string): string => {
+    if (!text) return '';
+    
+    return text
+      // Remove all ** characters (bold markdown)
+      .replace(/\*\*/g, '')
+      // Remove all * characters (italic markdown) but be careful not to remove bullet points
+      .replace(/(?<!\s)\*(?!\s)/g, '')
+      // Remove other markdown formatting
+      .replace(/_{2,}/g, '') // Remove __ (underline)
+      .replace(/`{1,3}/g, '') // Remove ` and ``` (code)
+      .replace(/#{1,6}\s*/g, '') // Remove # headers
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Convert [text](link) to just text
+      // Clean up extra whitespace
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
   // Enhanced parsing function that processes full content without limits
   const parseRawResponse = (rawResponse: string): ParsedInsights => {
     const parsed: ParsedInsights = {};
@@ -214,14 +233,11 @@ export default function AIInsightsScreen() {
         const openingLines = lines.slice(0, firstSectionIndex);
         let openingText = openingLines.join(' ').trim();
         
-        // Enhanced cleaning of opening statement - remove all variations
-        openingText = openingText
-          .replace(/\*\*/g, '') // Remove ** characters
+        // Enhanced cleaning of opening statement - remove all variations and markdown
+        openingText = cleanMarkdownText(openingText)
           .replace(/Opening Statement:?\s*/gi, '') // Remove "Opening Statement" text
           .replace(/^Opening Statement\s*/gi, '') // Remove "Opening Statement" at the beginning
           .replace(/Opening Statement$/gi, '') // Remove "Opening Statement" at the end
-          .replace(/^\*\*Opening Statement\*\*:?\s*/gi, '') // Remove **Opening Statement**
-          .replace(/\*\*Opening Statement\*\*$/gi, '') // Remove **Opening Statement** at the end
           .trim();
         
         // Accept any length of opening statement
@@ -240,7 +256,7 @@ export default function AIInsightsScreen() {
   // Enhanced helper function to clean and filter insight items with comprehensive filtering
   const cleanInsightItems = (items: string[]): string[] => {
     return items
-      .map(item => item.trim()) // Trim whitespace
+      .map(item => cleanMarkdownText(item.trim())) // Apply markdown cleaning to each item
       .filter(item => item.length > 0) // Remove empty items
       .filter(item => {
         // More comprehensive regex to catch various emoji patterns
@@ -282,7 +298,7 @@ export default function AIInsightsScreen() {
         whatYouDidWell: cleanInsightItems(match.aiInsights.whatYouDidWell),
         areasToImprove: cleanInsightItems(match.aiInsights.areasToImprove).slice(0, 3), // Limit to 3 items
         trainingRecommendations: cleanInsightItems(match.aiInsights.trainingRecommendations).slice(0, 3), // Limit to 3 items
-        overallAssessment: match.aiInsights.overallAssessment,
+        overallAssessment: cleanMarkdownText(match.aiInsights.overallAssessment),
       };
     }
     
@@ -291,7 +307,7 @@ export default function AIInsightsScreen() {
       whatYouDidWell: cleanInsightItems(match.aiInsights.whatYouDidWell),
       areasToImprove: cleanInsightItems(match.aiInsights.areasToImprove).slice(0, 3), // Limit to 3 items
       trainingRecommendations: cleanInsightItems(match.aiInsights.trainingRecommendations).slice(0, 3), // Limit to 3 items
-      overallAssessment: match.aiInsights.overallAssessment,
+      overallAssessment: cleanMarkdownText(match.aiInsights.overallAssessment),
     };
   };
 
@@ -385,15 +401,15 @@ export default function AIInsightsScreen() {
       " Keep up that fantastic energy - you are destined for tennis greatness!",
     ];
 
-    let enhancedText = text;
+    let enhancedText = cleanMarkdownText(text); // Clean markdown from TTS text too
     
     if (sectionName === 'full') {
       const greeting = superEnthusiasticGreetings[Math.floor(Math.random() * superEnthusiasticGreetings.length)];
-      enhancedText = greeting + text;
+      enhancedText = greeting + enhancedText;
     } else if (sectionName in superLivelyTransitions) {
       const sectionTransitions = superLivelyTransitions[sectionName as keyof typeof superLivelyTransitions];
       const transition = sectionTransitions[Math.floor(Math.random() * sectionTransitions.length)];
-      enhancedText = transition + text;
+      enhancedText = transition + enhancedText;
     }
 
     // Add super warm encouraging ending
@@ -704,10 +720,9 @@ export default function AIInsightsScreen() {
         return headerPatterns.some(pattern => pattern.test(line.trim())) && line.split(' ').length <= 5;
       };
 
-      // Helper function to clean item text
+      // Helper function to clean item text with enhanced markdown removal
       const cleanItemText = (text: string): string => {
-        return text
-          .replace(/^\*\*|\*\*$/g, '') // Remove ** at start/end
+        return cleanMarkdownText(text)
           .replace(/^[-•*]\s*/, '') // Remove bullet points
           .replace(/^\d+[\.\)]\s*/, '') // Remove numbers
           .replace(/^[a-zA-Z][\.\)]\s*/, '') // Remove letter bullets
