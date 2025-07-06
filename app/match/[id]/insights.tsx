@@ -5,7 +5,6 @@ import { useMatchStore } from '@/store/matchStore';
 import Colors from '@/constants/colors';
 import { Brain, CheckCircle, Target, TrendingUp, RefreshCw, Play, Pause, Square, Volume2, Wifi, WifiOff, MessageCircle } from 'lucide-react-native';
 import { Match, Point, Game, Set, ErrorType, ShotType, TiebreakPoint, MentalPhysicalState, formatEnumValue, calculateRallyLengthStats } from '@/types/tennis';
-import { trpc } from '@/lib/trpc';
 
 // Safe TTS initialization with proper error handling
 let Speech: any = null;
@@ -91,21 +90,6 @@ export default function AIInsightsScreen() {
   });
   
   const match = matches.find(m => m.id === id);
-  
-  // Use the tRPC mutation hook with proper error typing
-  const generateInsightsMutation = trpc.insights.generate.useMutation({
-    onError: (error: any) => {
-      console.error('tRPC Error:', error);
-      if (error.message.includes('Network request failed') || error.message.includes('fetch') || error.message.includes('JSON Parse error')) {
-        setNetworkError('Unable to connect to the AI service. Please check your internet connection and try again.');
-      } else {
-        setNetworkError(error.message);
-      }
-    },
-    onSuccess: () => {
-      setNetworkError(null);
-    }
-  });
   
   // Initialize Speech module safely with proper error handling
   useEffect(() => {
@@ -513,6 +497,230 @@ export default function AIInsightsScreen() {
     await speakText(text, sectionName);
   };
 
+  // Generate fallback insights based on match statistics - no text limits
+  const generateFallbackInsights = (matchData: any) => {
+    const insights = {
+      whatYouDidWell: [] as string[],
+      areasToImprove: [] as string[],
+      trainingRecommendations: [] as string[],
+      overallAssessment: '',
+      generatedAt: new Date().toISOString(),
+      llmUsed: 'PointHit',
+      rawResponse: undefined,
+    };
+
+    // Analyze strengths - no length limits
+    if (matchData.matchResult === 'Won') {
+      insights.whatYouDidWell.push('Congratulations on your victory! Your mental toughness and execution under pressure were key factors in securing the win.');
+    }
+
+    if (matchData.firstServePercentage >= 65) {
+      insights.whatYouDidWell.push(`Excellent first serve percentage at ${matchData.firstServePercentage}%. Your serve was a reliable weapon throughout the match.`);
+    }
+
+    if (matchData.aces >= 3) {
+      insights.whatYouDidWell.push(`Outstanding serving with ${matchData.aces} aces! Your power and placement on serve created free points.`);
+    }
+
+    if (matchData.winners > matchData.unforcedErrors) {
+      insights.whatYouDidWell.push('Great shot selection and execution! You hit more winners than unforced errors, showing aggressive yet controlled play.');
+    }
+
+    // Rally length analysis - no length limits
+    if (matchData.rallyLengthStats) {
+      const { shortRallies, mediumRallies, longRallies } = matchData.rallyLengthStats;
+      
+      if (shortRallies.winPercentage >= 60) {
+        insights.whatYouDidWell.push('Excellent performance in short rallies! Your aggressive early-ball striking and court positioning were very effective.');
+      }
+      
+      if (longRallies.winPercentage >= 60) {
+        insights.whatYouDidWell.push('Outstanding endurance and patience in long rallies! Your fitness and mental resilience really showed.');
+      }
+    }
+
+    // Analyze areas for improvement - no length limits
+    if (matchData.doubleFaults >= 3) {
+      insights.areasToImprove.push(`Work on second serve consistency. ${matchData.doubleFaults} double faults gave away free points to your opponent.`);
+    }
+
+    if (matchData.firstServePercentage < 55) {
+      insights.areasToImprove.push(`First serve percentage of ${matchData.firstServePercentage}% needs improvement. Focus on rhythm and technique over power.`);
+    }
+
+    if (matchData.unforcedErrors > matchData.winners) {
+      insights.areasToImprove.push('Reduce unforced errors by improving shot selection and maintaining better balance during rallies.');
+    }
+
+    // Error analysis - no length limits
+    const totalErrors = Object.values(matchData.errors).reduce((sum: number, count: any) => sum + count, 0);
+    if (totalErrors > 0) {
+      const maxErrorType = Object.entries(matchData.errors).reduce((max, [type, count]) => 
+        (count as number) > max.count ? { type, count: count as number } : max, { type: '', count: 0 });
+      
+      if (maxErrorType.count >= 3) {
+        insights.areasToImprove.push(`Focus on ${maxErrorType.type} technique - this was your most frequent error type with ${maxErrorType.count} occurrences.`);
+      }
+    }
+
+    // Training recommendations - no length limits
+    if (matchData.doubleFaults >= 2) {
+      insights.trainingRecommendations.push('Practice second serve placement drills. Focus on hitting to specific targets with consistent spin and depth.');
+    }
+
+    if (matchData.firstServePercentage < 60) {
+      insights.trainingRecommendations.push('Work on serve rhythm with shadow serving and target practice. Start with 75% power and gradually increase.');
+    }
+
+    insights.trainingRecommendations.push('Practice point construction drills to improve shot selection and court positioning during rallies.');
+
+    if (matchData.rallyLengthStats && matchData.rallyLengthStats.shortRallies.winPercentage < 50) {
+      insights.trainingRecommendations.push('Work on aggressive return of serve and approach shot drills to improve short rally performance.');
+    }
+
+    // Overall assessment - no length limits
+    const winPercentage = Math.round((matchData.playerPoints / matchData.totalPoints) * 100);
+    insights.overallAssessment = `You played with ${winPercentage}% point efficiency in this ${matchData.matchResult.toLowerCase()} against ${matchData.opponentName}. `;
+    
+    if (matchData.matchResult === 'Won') {
+      insights.overallAssessment += 'Your victory demonstrates solid fundamentals and mental strength. Continue building on these strengths while addressing the improvement areas to elevate your game further.';
+    } else {
+      insights.overallAssessment += 'While the result wasn\'t what you wanted, there were many positive aspects to build upon. Focus on the improvement areas and keep working on your strengths.';
+    }
+
+    // Ensure we have content for all sections - no minimum length requirements
+    if (insights.whatYouDidWell.length === 0) {
+      insights.whatYouDidWell.push('You showed determination and fighting spirit throughout the match, which are essential qualities for improvement.');
+    }
+
+    if (insights.areasToImprove.length === 0) {
+      insights.areasToImprove.push('Continue working on consistency and shot selection to take your game to the next level.');
+    }
+
+    if (insights.trainingRecommendations.length === 0) {
+      insights.trainingRecommendations.push('Focus on regular practice sessions with emphasis on footwork, consistency, and mental preparation.');
+    }
+
+    return insights;
+  };
+
+  // Enhanced AI response parsing function that handles full content without limits
+  const parseAIResponse = (rawResponse: string) => {
+    const insights = {
+      whatYouDidWell: [] as string[],
+      areasToImprove: [] as string[],
+      trainingRecommendations: [] as string[],
+      overallAssessment: '',
+    };
+
+    try {
+      // Clean the response first
+      let cleanedResponse = rawResponse;
+      
+      // Remove <think> tags if present
+      cleanedResponse = cleanedResponse.replace(/<think>[\s\S]*?<\/think>/gi, '');
+      
+      // Try to extract JSON if the response is wrapped in JSON
+      try {
+        const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const jsonResponse = JSON.parse(jsonMatch[0]);
+          if (jsonResponse.insights) {
+            cleanedResponse = jsonResponse.insights;
+          }
+        }
+      } catch (jsonError) {
+        // If not JSON, continue with the original response
+      }
+
+      // Function to extract numbered items from a section - no length limits
+      const extractNumberedItems = (sectionText: string): string[] => {
+        const items: string[] = [];
+        
+        // Split by lines and look for numbered items
+        const lines = sectionText.split('\n').map(line => line.trim());
+        
+        // Process each line using standard iteration
+        lines.forEach((line) => {
+          // Match patterns like "1.", "2.", "3.", "1)", "2)", "3)", etc.
+          const numberedMatch = line.match(/^(\d+)[\.\)]\s*(.+)$/);
+          if (numberedMatch && numberedMatch[2]) {
+            const content = numberedMatch[2].trim().replace(/\*\*/g, '');
+            // Accept any content length - no minimum requirements
+            if (content.length > 0) {
+              items.push(content);
+            }
+          }
+          // Also handle bullet points that might not be numbered
+          else if (line.match(/^[-•*]\s*(.+)$/)) {
+            const bulletMatch = line.match(/^[-•*]\s*(.+)$/);
+            if (bulletMatch && bulletMatch[1]) {
+              const content = bulletMatch[1].trim().replace(/\*\*/g, '');
+              // Accept any content length - no minimum requirements
+              if (content.length > 0) {
+                items.push(content);
+              }
+            }
+          }
+        });
+        
+        // Enhanced filtering to remove empty items and emoji-only content
+        return items.filter(item => {
+          const trimmed = item.trim();
+          
+          // More comprehensive regex to catch various emoji patterns
+          const emojiOnlyPattern = /^[🎯💡🎾🚀🌟🏆\s\*\-\•\.\,\!\?\:]+$/;
+          const punctuationOnlyPattern = /^[\s\*\-\•\.\,\!\?\:]+$/;
+          const numberBulletPattern = /^[\d\.\)\s\-\•\*]+$/;
+          
+          return trimmed.length > 0 && 
+                 !emojiOnlyPattern.test(trimmed) && 
+                 !punctuationOnlyPattern.test(trimmed) &&
+                 !numberBulletPattern.test(trimmed);
+        });
+      };
+
+      // Split the response into sections
+      const sections = cleanedResponse.split(/(?=(?:What (?:Went )?Well|Areas? (?:to )?Improve|Suggested? Drills?|Training|Overall|Final|Opening Statement))/gi);
+      
+      // Process each section using standard iteration
+      sections.forEach((section) => {
+        const sectionLower = section.toLowerCase();
+        
+        if (sectionLower.includes('what went well') || sectionLower.includes('what you did well')) {
+          const items = extractNumberedItems(section);
+          insights.whatYouDidWell.push(...items);
+        }
+        else if (sectionLower.includes('areas to improve') || sectionLower.includes('areas for improvement')) {
+          const items = extractNumberedItems(section);
+          insights.areasToImprove.push(...items);
+        }
+        else if (sectionLower.includes('suggested drill') || sectionLower.includes('training') || sectionLower.includes('practice')) {
+          const items = extractNumberedItems(section);
+          insights.trainingRecommendations.push(...items);
+        }
+        else if (sectionLower.includes('overall') || sectionLower.includes('final') || sectionLower.includes('assessment') || sectionLower.includes('opening statement')) {
+          // For overall assessment, take the first substantial paragraph and clean it - no length limits
+          const lines = section.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+          const validLine = lines.find(line => 
+            line.length > 0 && 
+            !line.toLowerCase().includes('overall') && 
+            !line.toLowerCase().includes('final') && 
+            !line.toLowerCase().includes('opening statement')
+          );
+          if (validLine) {
+            insights.overallAssessment = validLine.replace(/\*\*/g, '').trim();
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error('Error parsing AI response:', error);
+    }
+
+    return insights;
+  };
+
   const generateAIInsights = async () => {
     setIsGeneratingInsights(true);
     setNetworkError(null);
@@ -616,27 +824,196 @@ export default function AIInsightsScreen() {
         comments: match.comments || ''
       };
 
-      const result = await generateInsightsMutation.mutateAsync({ matchData });
+      console.log(`[${new Date().toISOString()}] Making direct request to AI service`);
+
+      // Direct fetch to AI service without tRPC middleware
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+      const response = await fetch('https://pointhit.com/tennis-insights', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'PointHit-App/1.3.3',
+          'X-Client-Platform': Platform.OS,
+          'X-Request-Source': 'production',
+        },
+        body: JSON.stringify({ data: matchData }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      console.log(`[${new Date().toISOString()}] AI service response status:`, response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[${new Date().toISOString()}] AI service error:`, response.status, errorText);
+        throw new Error(`AI service responded with status: ${response.status}`);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const responseText = await response.text();
+        console.error(`[${new Date().toISOString()}] AI service returned non-JSON:`, contentType);
+        throw new Error(`AI service returned ${contentType} instead of JSON`);
+      }
+
+      const aiResult = await response.json();
+      console.log(`[${new Date().toISOString()}] AI service response received:`, !!aiResult.insights);
       
-      if (result.success && result.insights) {
-        updateMatchInsights(match.id, result.insights);
+      if (aiResult.insights) {
+        // Parse the AI response using the enhanced parser - no length limits
+        const rawResponse = typeof aiResult.insights === 'string' ? aiResult.insights : JSON.stringify(aiResult.insights);
+        const parsedInsights = parseAIResponse(rawResponse);
+        
+        const insights = {
+          whatYouDidWell: parsedInsights.whatYouDidWell,
+          areasToImprove: parsedInsights.areasToImprove,
+          trainingRecommendations: parsedInsights.trainingRecommendations,
+          overallAssessment: parsedInsights.overallAssessment,
+          generatedAt: new Date().toISOString(),
+          llmUsed: 'AI Coach',
+          rawResponse: rawResponse,
+        };
+
+        // Fallback to generated insights if parsing failed - no length restrictions
+        if (insights.whatYouDidWell.length === 0 || insights.areasToImprove.length === 0) {
+          console.log(`[${new Date().toISOString()}] AI parsing failed, using fallback insights`);
+          const fallbackInsights = generateFallbackInsights(matchData);
+          updateMatchInsights(match.id, {
+            ...fallbackInsights,
+            rawResponse: rawResponse,
+            llmUsed: 'AI Coach + PointHit Fallback'
+          });
+          Alert.alert('Insights Ready! 📊', 'Generated personalized insights for your match with incredible enthusiasm. Check them out below!');
+          return;
+        }
+
+        console.log(`[${new Date().toISOString()}] Successfully generated AI insights`);
+        updateMatchInsights(match.id, insights);
         Alert.alert('Success! 🎾', 'Your personalized AI insights are ready! Tap the audio button to hear your super enthusiastic coaching session!');
       } else {
-        // Even if AI failed, we still got fallback insights
-        if (result.insights) {
-          updateMatchInsights(match.id, result.insights);
-          Alert.alert('Insights Ready! 📊', 'Generated personalized insights for your match with incredible enthusiasm. Check them out below!');
-        } else {
-          Alert.alert('Oops!', result.error || 'Had trouble generating insights. Please try again.');
-        }
+        throw new Error('No insights in AI response');
       }
     } catch (error) {
-      console.error('Error generating insights:', error);
-      if (error instanceof Error && (error.message.includes('Network request failed') || error.message.includes('JSON Parse error'))) {
-        setNetworkError('Unable to connect to the AI service. Please check your internet connection and try again.');
-      } else {
-        Alert.alert('Connection Issue', 'Had trouble connecting to our super enthusiastic AI coach. Please check your internet and try again.');
+      console.error(`[${new Date().toISOString()}] AI insights generation failed:`, error);
+      
+      // Enhanced error handling for different types of failures
+      let errorMessage = 'AI service unavailable, using PointHit analysis';
+      
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = 'AI service timeout, using PointHit analysis';
+          setNetworkError('Request timeout - please check your internet connection and try again.');
+        } else if (error.message.includes('Network request failed')) {
+          errorMessage = 'Network connection failed, using PointHit analysis';
+          setNetworkError('Unable to connect to the AI service. Please check your internet connection and try again.');
+        } else if (error.message.includes('JSON Parse error')) {
+          errorMessage = 'AI service returned invalid response, using PointHit analysis';
+          setNetworkError('AI service returned invalid response. Please try again.');
+        } else if (error.message.includes('fetch')) {
+          errorMessage = 'Unable to connect to AI service, using PointHit analysis';
+          setNetworkError('Unable to connect to the AI service. Please check your internet connection and try again.');
+        } else {
+          setNetworkError('Unable to connect to the AI service. Please check your internet connection and try again.');
+        }
       }
+      
+      // Return fallback insights - no length restrictions
+      const matchResult = getMatchResult();
+      const matchScore = getMatchScore();
+      const playerPoints = countPlayerPoints(match);
+      const totalPoints = countTotalPoints(match);
+      const opponentPoints = totalPoints - playerPoints;
+      const matchDuration = formatMatchDuration(match);
+      
+      const firstServePercentage = calculateFirstServePercentage(match);
+      const secondServePercentage = calculateSecondServePercentage(match);
+      const aces = countAceWinners(match);
+      const doubleFaults = countDoubleFaults(match);
+      const totalWinners = countWinners(match);
+      const unforcedErrors = countUnforcedErrors(match);
+      
+      const directWinners = {
+        forehand: countForehandWinners(match),
+        backhand: countBackhandWinners(match),
+        volley: countVolleyWinners(match),
+        dropshot: countDropshotWinners(match),
+        overhead: countOverheadWinners(match),
+        lob: countLobWinners(match),
+        ace: countAceWinners(match),
+        slice: countSliceWinners(match),
+      };
+      
+      const unreturnedShots = {
+        forehand: countForehandUnreturned(match),
+        backhand: countBackhandUnreturned(match),
+        volley: countVolleyUnreturned(match),
+        dropshot: countDropshotUnreturned(match),
+        overhead: countOverheadUnreturned(match),
+        lob: countLobUnreturned(match),
+        serve: countServeUnreturned(match),
+        slice: countSliceUnreturned(match),
+      };
+      
+      const errors = {
+        forehand: countForehandUnforcedErrors(match),
+        backhand: countBackhandUnforcedErrors(match),
+        volley: countVolleyUnforcedErrors(match),
+        dropshot: countDropshotUnforcedErrors(match),
+        overhead: countOverheadUnforcedErrors(match),
+        slice: countSliceUnforcedErrors(match),
+        doubleFault: countDoubleFaults(match),
+      };
+
+      const mentalPhysicalStates = getMentalPhysicalStatesBreakdown(match);
+      const allMatchPoints = getAllMatchPoints(match);
+      const rallyLengthStats = calculateRallyLengthStats(allMatchPoints);
+      
+      const pointsPerSet = match.sets.map((set, index) => {
+        const setPoints = getPointsPerSet(match, index);
+        return {
+          set: index + 1,
+          player: setPoints.player,
+          opponent: setPoints.opponent
+        };
+      });
+
+      const matchData = {
+        playerName: match.player.name,
+        opponentName: match.opponent.name,
+        matchResult,
+        finalScore: matchScore,
+        matchDuration,
+        totalPoints,
+        playerPoints,
+        opponentPoints,
+        firstServePercentage,
+        secondServePercentage,
+        aces,
+        doubleFaults,
+        winners: totalWinners,
+        unforcedErrors,
+        directWinners,
+        unreturnedShots,
+        errors,
+        mentalPhysicalStates,
+        pointsPerSet,
+        rallyLengthStats: {
+          shortRallies: rallyLengthStats.shortRallies,
+          mediumRallies: rallyLengthStats.mediumRallies,
+          longRallies: rallyLengthStats.longRallies,
+          averageLength: rallyLengthStats.averageLength,
+          totalPointsWithRallyData: rallyLengthStats.totalPointsWithRallyData,
+        },
+        comments: match.comments || ''
+      };
+
+      const fallbackInsights = generateFallbackInsights(matchData);
+      updateMatchInsights(match.id, fallbackInsights);
+      Alert.alert('Insights Ready! 📊', 'Generated personalized insights for your match. Check them out below!');
     } finally {
       setIsGeneratingInsights(false);
     }
@@ -646,7 +1023,7 @@ export default function AIInsightsScreen() {
   useEffect(() => {
     // Add a delay to prevent initialization issues
     const timer = setTimeout(() => {
-      if (!match.aiInsights && !isGeneratingInsights && !generateInsightsMutation.isPending) {
+      if (!match.aiInsights && !isGeneratingInsights) {
         generateAIInsights();
       }
     }, 1000); // 1 second delay
@@ -674,7 +1051,7 @@ export default function AIInsightsScreen() {
         <TouchableOpacity 
           style={styles.retryButton} 
           onPress={generateAIInsights}
-          disabled={isGeneratingInsights || generateInsightsMutation.isPending}
+          disabled={isGeneratingInsights}
         >
           <Text style={styles.retryButtonText}>Try Again</Text>
         </TouchableOpacity>
@@ -839,16 +1216,16 @@ export default function AIInsightsScreen() {
             <TouchableOpacity 
               style={styles.refreshButton} 
               onPress={generateAIInsights}
-              disabled={isGeneratingInsights || generateInsightsMutation.isPending}
+              disabled={isGeneratingInsights}
               activeOpacity={0.7}
             >
-              {isGeneratingInsights || generateInsightsMutation.isPending ? (
+              {isGeneratingInsights ? (
                 <ActivityIndicator size="small" color={Colors.primary} />
               ) : (
                 <RefreshCw size={20} color={Colors.primary} />
               )}
               <Text style={styles.refreshText}>
-                {isGeneratingInsights || generateInsightsMutation.isPending ? 'Generating...' : 'Refresh'}
+                {isGeneratingInsights ? 'Generating...' : 'Refresh'}
               </Text>
             </TouchableOpacity>
           )}
@@ -867,7 +1244,7 @@ export default function AIInsightsScreen() {
 
         {match.aiInsights && renderTTSControls()}
 
-        {(isGeneratingInsights || generateInsightsMutation.isPending) && !match.aiInsights ? (
+        {isGeneratingInsights && !match.aiInsights ? (
           <View style={styles.loadingInsights}>
             <Brain size={60} color={Colors.primary} />
             <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 16 }} />
@@ -877,7 +1254,7 @@ export default function AIInsightsScreen() {
             </Text>
             <View style={styles.connectionStatus}>
               <Wifi size={16} color={Colors.textSecondary} />
-              <Text style={styles.connectionText}>Connecting to super enthusiastic AI coaching service...</Text>
+              <Text style={styles.connectionText}>Connecting to AI coaching service...</Text>
             </View>
           </View>
         ) : match.aiInsights ? (
@@ -965,7 +1342,7 @@ export default function AIInsightsScreen() {
             <TouchableOpacity 
               style={styles.retryButton} 
               onPress={generateAIInsights}
-              disabled={isGeneratingInsights || generateInsightsMutation.isPending}
+              disabled={isGeneratingInsights}
             >
               <Text style={styles.retryButtonText}>Try Again</Text>
             </TouchableOpacity>
