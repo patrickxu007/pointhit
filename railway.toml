@@ -1,0 +1,12 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npm run start:backend"
+
+[[services]]
+name = "pointhit-backend"
+
+[services.variables]
+NODE_ENV = "production"
+PORT = "3000"
