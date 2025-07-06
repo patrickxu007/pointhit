@@ -274,8 +274,8 @@ export default function AIInsightsScreen() {
       return {
         openingStatement: parsed.openingStatement,
         whatYouDidWell: cleanInsightItems(match.aiInsights.whatYouDidWell),
-        areasToImprove: cleanInsightItems(match.aiInsights.areasToImprove),
-        trainingRecommendations: cleanInsightItems(match.aiInsights.trainingRecommendations),
+        areasToImprove: cleanInsightItems(match.aiInsights.areasToImprove).slice(0, 3), // Limit to 3 items
+        trainingRecommendations: cleanInsightItems(match.aiInsights.trainingRecommendations).slice(0, 3), // Limit to 3 items
         overallAssessment: match.aiInsights.overallAssessment,
       };
     }
@@ -283,8 +283,8 @@ export default function AIInsightsScreen() {
     return {
       openingStatement: undefined,
       whatYouDidWell: cleanInsightItems(match.aiInsights.whatYouDidWell),
-      areasToImprove: cleanInsightItems(match.aiInsights.areasToImprove),
-      trainingRecommendations: cleanInsightItems(match.aiInsights.trainingRecommendations),
+      areasToImprove: cleanInsightItems(match.aiInsights.areasToImprove).slice(0, 3), // Limit to 3 items
+      trainingRecommendations: cleanInsightItems(match.aiInsights.trainingRecommendations).slice(0, 3), // Limit to 3 items
       overallAssessment: match.aiInsights.overallAssessment,
     };
   };
@@ -539,7 +539,7 @@ export default function AIInsightsScreen() {
       }
     }
 
-    // Analyze areas for improvement - no length limits
+    // Analyze areas for improvement - limit to 3 items
     if (matchData.doubleFaults >= 3) {
       insights.areasToImprove.push(`Work on second serve consistency. ${matchData.doubleFaults} double faults gave away free points to your opponent.`);
     }
@@ -552,9 +552,12 @@ export default function AIInsightsScreen() {
       insights.areasToImprove.push('Reduce unforced errors by improving shot selection and maintaining better balance during rallies.');
     }
 
+    // Limit to 3 items
+    insights.areasToImprove = insights.areasToImprove.slice(0, 3);
+
     // Error analysis - no length limits
     const totalErrors = Object.values(matchData.errors).reduce((sum: number, count: any) => sum + count, 0);
-    if (totalErrors > 0) {
+    if (totalErrors > 0 && insights.areasToImprove.length < 3) {
       const maxErrorType = Object.entries(matchData.errors).reduce((max, [type, count]) => 
         (count as number) > max.count ? { type, count: count as number } : max, { type: '', count: 0 });
       
@@ -563,7 +566,7 @@ export default function AIInsightsScreen() {
       }
     }
 
-    // Training recommendations - no length limits
+    // Training recommendations - limit to 3 items
     if (matchData.doubleFaults >= 2) {
       insights.trainingRecommendations.push('Practice second serve placement drills. Focus on hitting to specific targets with consistent spin and depth.');
     }
@@ -574,9 +577,12 @@ export default function AIInsightsScreen() {
 
     insights.trainingRecommendations.push('Practice point construction drills to improve shot selection and court positioning during rallies.');
 
-    if (matchData.rallyLengthStats && matchData.rallyLengthStats.shortRallies.winPercentage < 50) {
+    if (matchData.rallyLengthStats && matchData.rallyLengthStats.shortRallies.winPercentage < 50 && insights.trainingRecommendations.length < 3) {
       insights.trainingRecommendations.push('Work on aggressive return of serve and approach shot drills to improve short rally performance.');
     }
+
+    // Limit to 3 items
+    insights.trainingRecommendations = insights.trainingRecommendations.slice(0, 3);
 
     // Overall assessment - no length limits
     const winPercentage = Math.round((matchData.playerPoints / matchData.totalPoints) * 100);
@@ -604,7 +610,7 @@ export default function AIInsightsScreen() {
     return insights;
   };
 
-  // Enhanced AI response parsing function that handles full content without limits
+  // Enhanced AI response parsing function that handles full content without limits but enforces item limits
   const parseAIResponse = (rawResponse: string) => {
     const insights = {
       whatYouDidWell: [] as string[],
@@ -680,39 +686,91 @@ export default function AIInsightsScreen() {
         });
       };
 
-      // Split the response into sections
-      const sections = cleanedResponse.split(/(?=(?:What (?:Went )?Well|Areas? (?:to )?Improve|Suggested? Drills?|Training|Overall|Final|Opening Statement))/gi);
+      // Enhanced section detection with fuzzy matching for typos
+      const detectSectionType = (sectionText: string): string => {
+        const sectionLower = sectionText.toLowerCase();
+        
+        // What went well variations
+        if (sectionLower.includes('what went well') || 
+            sectionLower.includes('what you did well') ||
+            sectionLower.includes('strengths') ||
+            sectionLower.includes('positives')) {
+          return 'whatWentWell';
+        }
+        
+        // Areas to improve variations (with typo tolerance)
+        if (sectionLower.includes('areas to improve') || 
+            sectionLower.includes('areas for improvement') ||
+            sectionLower.includes('improvement') ||
+            sectionLower.includes('weaknesses') ||
+            sectionLower.includes('areas to work on')) {
+          return 'areasToImprove';
+        }
+        
+        // Training/drills variations (with typo tolerance)
+        if (sectionLower.includes('suggested drill') || 
+            sectionLower.includes('suggested drall') || // Common typo
+            sectionLower.includes('training') || 
+            sectionLower.includes('practice') ||
+            sectionLower.includes('recommendations') ||
+            sectionLower.includes('drills') ||
+            sectionLower.includes('dralls') || // Common typo
+            sectionLower.includes('exercises')) {
+          return 'trainingRecommendations';
+        }
+        
+        // Overall assessment variations
+        if (sectionLower.includes('overall') || 
+            sectionLower.includes('final') || 
+            sectionLower.includes('assessment') || 
+            sectionLower.includes('summary') ||
+            sectionLower.includes('conclusion') ||
+            sectionLower.includes('opening statement')) {
+          return 'overallAssessment';
+        }
+        
+        return 'unknown';
+      };
+
+      // Split the response into sections using more flexible patterns
+      const sections = cleanedResponse.split(/(?=(?:What (?:Went )?Well|Areas? (?:to )?Improve|Suggested? Drills?|Suggested? Dralls?|Training|Overall|Final|Opening Statement|Strengths|Weaknesses|Recommendations|Practice|Exercises|Summary|Conclusion))/gi);
       
       // Process each section using standard iteration
       sections.forEach((section) => {
-        const sectionLower = section.toLowerCase();
+        const sectionType = detectSectionType(section);
         
-        if (sectionLower.includes('what went well') || sectionLower.includes('what you did well')) {
+        if (sectionType === 'whatWentWell') {
           const items = extractNumberedItems(section);
           insights.whatYouDidWell.push(...items);
         }
-        else if (sectionLower.includes('areas to improve') || sectionLower.includes('areas for improvement')) {
+        else if (sectionType === 'areasToImprove') {
           const items = extractNumberedItems(section);
           insights.areasToImprove.push(...items);
         }
-        else if (sectionLower.includes('suggested drill') || sectionLower.includes('training') || sectionLower.includes('practice')) {
+        else if (sectionType === 'trainingRecommendations') {
           const items = extractNumberedItems(section);
           insights.trainingRecommendations.push(...items);
         }
-        else if (sectionLower.includes('overall') || sectionLower.includes('final') || sectionLower.includes('assessment') || sectionLower.includes('opening statement')) {
+        else if (sectionType === 'overallAssessment') {
           // For overall assessment, take the first substantial paragraph and clean it - no length limits
           const lines = section.split('\n').map(line => line.trim()).filter(line => line.length > 0);
           const validLine = lines.find(line => 
             line.length > 0 && 
             !line.toLowerCase().includes('overall') && 
             !line.toLowerCase().includes('final') && 
-            !line.toLowerCase().includes('opening statement')
+            !line.toLowerCase().includes('opening statement') &&
+            !line.toLowerCase().includes('summary') &&
+            !line.toLowerCase().includes('conclusion')
           );
           if (validLine) {
             insights.overallAssessment = validLine.replace(/\*\*/g, '').trim();
           }
         }
       });
+
+      // Enforce limits for specific sections
+      insights.areasToImprove = insights.areasToImprove.slice(0, 3);
+      insights.trainingRecommendations = insights.trainingRecommendations.slice(0, 3);
 
     } catch (error) {
       console.error('Error parsing AI response:', error);
@@ -864,7 +922,7 @@ export default function AIInsightsScreen() {
       console.log(`[${new Date().toISOString()}] AI service response received:`, !!aiResult.insights);
       
       if (aiResult.insights) {
-        // Parse the AI response using the enhanced parser - no length limits
+        // Parse the AI response using the enhanced parser - with item limits
         const rawResponse = typeof aiResult.insights === 'string' ? aiResult.insights : JSON.stringify(aiResult.insights);
         const parsedInsights = parseAIResponse(rawResponse);
         
@@ -878,7 +936,7 @@ export default function AIInsightsScreen() {
           rawResponse: rawResponse,
         };
 
-        // Fallback to generated insights if parsing failed - no length restrictions
+        // Fallback to generated insights if parsing failed - with limits
         if (insights.whatYouDidWell.length === 0 || insights.areasToImprove.length === 0) {
           console.log(`[${new Date().toISOString()}] AI parsing failed, using fallback insights`);
           const fallbackInsights = generateFallbackInsights(matchData);
@@ -921,7 +979,7 @@ export default function AIInsightsScreen() {
         }
       }
       
-      // Return fallback insights - no length restrictions
+      // Return fallback insights - with limits
       const matchResult = getMatchResult();
       const matchScore = getMatchScore();
       const playerPoints = countPlayerPoints(match);
