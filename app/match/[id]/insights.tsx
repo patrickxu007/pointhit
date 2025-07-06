@@ -261,6 +261,12 @@ export default function AIInsightsScreen() {
         // Filter out items that are just numbers or bullets without content
         const numberBulletPattern = /^[\d\.\)\s\-\•\*]+$/;
         return !numberBulletPattern.test(item);
+      })
+      .filter(item => {
+        // Filter out items that are just section headers
+        const headerPattern = /^(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i;
+        const isJustHeader = headerPattern.test(item) && item.split(' ').length <= 3;
+        return !isJustHeader;
       });
   };
 
@@ -610,7 +616,7 @@ export default function AIInsightsScreen() {
     return insights;
   };
 
-  // Enhanced AI response parsing function that handles full content without limits but enforces item limits
+  // Enhanced AI response parsing function with much more robust parsing
   const parseAIResponse = (rawResponse: string) => {
     const insights = {
       whatYouDidWell: [] as string[],
@@ -639,134 +645,154 @@ export default function AIInsightsScreen() {
         // If not JSON, continue with the original response
       }
 
-      // Function to extract numbered items from a section - no length limits
-      const extractNumberedItems = (sectionText: string): string[] => {
+      // Enhanced function to extract items from a section with much better parsing
+      const extractItemsFromSection = (sectionText: string): string[] => {
         const items: string[] = [];
         
-        // Split by lines and look for numbered items
-        const lines = sectionText.split('\n').map(line => line.trim());
+        // Split by lines and process each line
+        const lines = sectionText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
         
-        // Process each line using standard iteration
-        lines.forEach((line) => {
-          // Match patterns like "1.", "2.", "3.", "1)", "2)", "3)", etc.
-          const numberedMatch = line.match(/^(\d+)[\.\)]\s*(.+)$/);
+        let currentItem = '';
+        
+        for (const line of lines) {
+          // Skip section headers
+          if (isLikelySectionHeader(line)) {
+            continue;
+          }
+          
+          // Check if this line starts a new numbered/bulleted item
+          const numberedMatch = line.match(/^(\d+[\.\)]\s*|[-•*]\s*|[a-zA-Z][\.\)]\s*)(.+)$/);
           if (numberedMatch && numberedMatch[2]) {
-            const content = numberedMatch[2].trim().replace(/\*\*/g, '');
-            // Accept any content length - no minimum requirements
-            if (content.length > 0) {
-              items.push(content);
+            // Save previous item if exists
+            if (currentItem.trim()) {
+              items.push(cleanItemText(currentItem.trim()));
+            }
+            // Start new item
+            currentItem = numberedMatch[2].trim();
+          } else if (line.length > 0 && !isLikelySectionHeader(line)) {
+            // This is a continuation of the current item or a standalone item
+            if (currentItem) {
+              currentItem += ' ' + line;
+            } else {
+              currentItem = line;
             }
           }
-          // Also handle bullet points that might not be numbered
-          else if (line.match(/^[-•*]\s*(.+)$/)) {
-            const bulletMatch = line.match(/^[-•*]\s*(.+)$/);
-            if (bulletMatch && bulletMatch[1]) {
-              const content = bulletMatch[1].trim().replace(/\*\*/g, '');
-              // Accept any content length - no minimum requirements
-              if (content.length > 0) {
-                items.push(content);
-              }
-            }
-          }
-        });
+        }
         
-        // Enhanced filtering to remove empty items and emoji-only content
+        // Add the last item
+        if (currentItem.trim()) {
+          items.push(cleanItemText(currentItem.trim()));
+        }
+        
+        // Filter out invalid items
         return items.filter(item => {
-          const trimmed = item.trim();
-          
-          // More comprehensive regex to catch various emoji patterns
-          const emojiOnlyPattern = /^[🎯💡🎾🚀🌟🏆\s\*\-\•\.\,\!\?\:]+$/;
-          const punctuationOnlyPattern = /^[\s\*\-\•\.\,\!\?\:]+$/;
-          const numberBulletPattern = /^[\d\.\)\s\-\•\*]+$/;
-          
-          return trimmed.length > 0 && 
-                 !emojiOnlyPattern.test(trimmed) && 
-                 !punctuationOnlyPattern.test(trimmed) &&
-                 !numberBulletPattern.test(trimmed);
+          const cleaned = item.trim();
+          return cleaned.length > 10 && // Minimum length for meaningful content
+                 !isJustEmojisOrPunctuation(cleaned) &&
+                 !isLikelySectionHeader(cleaned);
         });
       };
 
-      // Enhanced section detection with fuzzy matching for typos
-      const detectSectionType = (sectionText: string): string => {
-        const sectionLower = sectionText.toLowerCase();
+      // Helper function to check if a line is likely a section header
+      const isLikelySectionHeader = (line: string): boolean => {
+        const headerPatterns = [
+          /^(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i,
+          /^(what\s+went\s+well|areas?\s+to\s+improve|suggested?\s+drill|training\s+recommendation)/i,
+          /^\*\*(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i
+        ];
         
-        // What went well variations
-        if (sectionLower.includes('what went well') || 
-            sectionLower.includes('what you did well') ||
-            sectionLower.includes('strengths') ||
-            sectionLower.includes('positives')) {
-          return 'whatWentWell';
-        }
-        
-        // Areas to improve variations (with typo tolerance)
-        if (sectionLower.includes('areas to improve') || 
-            sectionLower.includes('areas for improvement') ||
-            sectionLower.includes('improvement') ||
-            sectionLower.includes('weaknesses') ||
-            sectionLower.includes('areas to work on')) {
-          return 'areasToImprove';
-        }
-        
-        // Training/drills variations (with typo tolerance)
-        if (sectionLower.includes('suggested drill') || 
-            sectionLower.includes('suggested drall') || // Common typo
-            sectionLower.includes('training') || 
-            sectionLower.includes('practice') ||
-            sectionLower.includes('recommendations') ||
-            sectionLower.includes('drills') ||
-            sectionLower.includes('dralls') || // Common typo
-            sectionLower.includes('exercises')) {
-          return 'trainingRecommendations';
-        }
-        
-        // Overall assessment variations
-        if (sectionLower.includes('overall') || 
-            sectionLower.includes('final') || 
-            sectionLower.includes('assessment') || 
-            sectionLower.includes('summary') ||
-            sectionLower.includes('conclusion') ||
-            sectionLower.includes('opening statement')) {
-          return 'overallAssessment';
-        }
-        
-        return 'unknown';
+        return headerPatterns.some(pattern => pattern.test(line.trim())) && line.split(' ').length <= 5;
       };
 
-      // Split the response into sections using more flexible patterns
-      const sections = cleanedResponse.split(/(?=(?:What (?:Went )?Well|Areas? (?:to )?Improve|Suggested? Drills?|Suggested? Dralls?|Training|Overall|Final|Opening Statement|Strengths|Weaknesses|Recommendations|Practice|Exercises|Summary|Conclusion))/gi);
-      
-      // Process each section using standard iteration
-      sections.forEach((section) => {
-        const sectionType = detectSectionType(section);
+      // Helper function to clean item text
+      const cleanItemText = (text: string): string => {
+        return text
+          .replace(/^\*\*|\*\*$/g, '') // Remove ** at start/end
+          .replace(/^[-•*]\s*/, '') // Remove bullet points
+          .replace(/^\d+[\.\)]\s*/, '') // Remove numbers
+          .replace(/^[a-zA-Z][\.\)]\s*/, '') // Remove letter bullets
+          .trim();
+      };
+
+      // Helper function to check if text is just emojis or punctuation
+      const isJustEmojisOrPunctuation = (text: string): boolean => {
+        const emojiPunctuationPattern = /^[🎯💡🎾🚀🌟🏆\s\*\-\•\.\,\!\?\:\(\)]+$/;
+        return emojiPunctuationPattern.test(text);
+      };
+
+      // Enhanced section detection with much better fuzzy matching
+      const detectSectionInText = (text: string, sectionKeywords: string[]): { start: number; end: number } | null => {
+        const lines = text.split('\n');
+        let startIndex = -1;
+        let endIndex = lines.length;
         
-        if (sectionType === 'whatWentWell') {
-          const items = extractNumberedItems(section);
-          insights.whatYouDidWell.push(...items);
-        }
-        else if (sectionType === 'areasToImprove') {
-          const items = extractNumberedItems(section);
-          insights.areasToImprove.push(...items);
-        }
-        else if (sectionType === 'trainingRecommendations') {
-          const items = extractNumberedItems(section);
-          insights.trainingRecommendations.push(...items);
-        }
-        else if (sectionType === 'overallAssessment') {
-          // For overall assessment, take the first substantial paragraph and clean it - no length limits
-          const lines = section.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-          const validLine = lines.find(line => 
-            line.length > 0 && 
-            !line.toLowerCase().includes('overall') && 
-            !line.toLowerCase().includes('final') && 
-            !line.toLowerCase().includes('opening statement') &&
-            !line.toLowerCase().includes('summary') &&
-            !line.toLowerCase().includes('conclusion')
-          );
-          if (validLine) {
-            insights.overallAssessment = validLine.replace(/\*\*/g, '').trim();
+        // Find start of section
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].toLowerCase().trim();
+          if (sectionKeywords.some(keyword => line.includes(keyword))) {
+            startIndex = i;
+            break;
           }
         }
-      });
+        
+        if (startIndex === -1) return null;
+        
+        // Find end of section (next section or end of text)
+        const allSectionKeywords = [
+          'what went well', 'what you did well', 'strengths', 'positives',
+          'areas to improve', 'areas for improvement', 'improvement', 'weaknesses', 'areas to work on',
+          'suggested drill', 'suggested drall', 'training', 'practice', 'recommendations', 'drills', 'dralls', 'exercises',
+          'overall', 'final', 'assessment', 'summary', 'conclusion', 'opening statement'
+        ];
+        
+        for (let i = startIndex + 1; i < lines.length; i++) {
+          const line = lines[i].toLowerCase().trim();
+          if (allSectionKeywords.some(keyword => keyword !== sectionKeywords.find(k => line.includes(k)) && line.includes(keyword))) {
+            endIndex = i;
+            break;
+          }
+        }
+        
+        return { start: startIndex, end: endIndex };
+      };
+
+      // Extract sections with enhanced detection
+      const lines = cleanedResponse.split('\n');
+      
+      // What went well section
+      const strengthsKeywords = ['what went well', 'what you did well', 'strengths', 'positives', 'what you crushed'];
+      const strengthsSection = detectSectionInText(cleanedResponse, strengthsKeywords);
+      if (strengthsSection) {
+        const sectionText = lines.slice(strengthsSection.start, strengthsSection.end).join('\n');
+        insights.whatYouDidWell = extractItemsFromSection(sectionText);
+      }
+      
+      // Areas to improve section
+      const improvementKeywords = ['areas to improve', 'areas for improvement', 'improvement', 'weaknesses', 'areas to work on', 'level up opportunities'];
+      const improvementSection = detectSectionInText(cleanedResponse, improvementKeywords);
+      if (improvementSection) {
+        const sectionText = lines.slice(improvementSection.start, improvementSection.end).join('\n');
+        insights.areasToImprove = extractItemsFromSection(sectionText);
+      }
+      
+      // Training recommendations section (with typo tolerance)
+      const trainingKeywords = ['suggested drill', 'suggested drall', 'training', 'practice', 'recommendations', 'drills', 'dralls', 'exercises', 'training roadmap', 'amazing training'];
+      const trainingSection = detectSectionInText(cleanedResponse, trainingKeywords);
+      if (trainingSection) {
+        const sectionText = lines.slice(trainingSection.start, trainingSection.end).join('\n');
+        insights.trainingRecommendations = extractItemsFromSection(sectionText);
+      }
+      
+      // Overall assessment section
+      const overallKeywords = ['overall', 'final', 'assessment', 'summary', 'conclusion', 'opening statement', 'performance story'];
+      const overallSection = detectSectionInText(cleanedResponse, overallKeywords);
+      if (overallSection) {
+        const sectionText = lines.slice(overallSection.start, overallSection.end).join('\n');
+        const overallItems = extractItemsFromSection(sectionText);
+        if (overallItems.length > 0) {
+          insights.overallAssessment = overallItems[0]; // Take the first substantial paragraph
+        }
+      }
 
       // Enforce limits for specific sections
       insights.areasToImprove = insights.areasToImprove.slice(0, 3);
