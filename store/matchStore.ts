@@ -130,6 +130,25 @@ function shouldCompleteMatch(sets: Set[]): boolean {
   return playerSetsWon >= 2 || opponentSetsWon >= 2;
 }
 
+// Helper function to check if this is the first point of the match
+// Checks both regular game points AND tiebreak points
+function isFirstPointOfMatch(match: Match): boolean {
+  // Check if any points have been recorded in any set (regular or tiebreak)
+  for (const set of match.sets) {
+    // Check regular games
+    for (const game of set.games) {
+      if (game.points.length > 0) {
+        return false;
+      }
+    }
+    // Check tiebreak points
+    if (set.tiebreak && set.tiebreak.points.length > 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Helper function to check if this is the first regular point of the match
 // Only checks regular game points, NOT tiebreak points
 function isFirstRegularPointOfMatch(match: Match): boolean {
@@ -331,8 +350,11 @@ export const useMatchStore = create<MatchState>()(
         
         const newMatch = { ...state.currentMatch };
         
-        // DO NOT start timing for tiebreak points
-        // Timing should only start with regular points
+        // Start timing if this is the first point of the match (including tiebreak points)
+        // Timing should start with the first point regardless of whether it's regular or tiebreak
+        if (isFirstPointOfMatch(newMatch) && !newMatch.startTime) {
+          newMatch.startTime = new Date().toISOString();
+        }
         
         const sets = [...newMatch.sets];
         
@@ -416,6 +438,16 @@ export const useMatchStore = create<MatchState>()(
           if (shouldCompleteMatch(newMatch.sets)) {
             newMatch.isCompleted = true;
             matchWasCompleted = true;
+            
+            // End timing when match is completed via tiebreak
+            if (newMatch.startTime && !newMatch.endTime) {
+              const endTime = new Date().toISOString();
+              const startTime = new Date(newMatch.startTime);
+              const totalDuration = new Date(endTime).getTime() - startTime.getTime();
+              
+              newMatch.endTime = endTime;
+              newMatch.totalDuration = totalDuration;
+            }
           } else {
             // Add new set if match is not completed
             const newSet: Set = {
@@ -519,7 +551,7 @@ export const useMatchStore = create<MatchState>()(
         }
         
         if (lastAction.matchWasCompleted) {
-          // Reverse match completion
+          // Reverse match completion and timing
           newMatch.isCompleted = lastAction.previousMatchState?.isCompleted || false;
           newMatch.endTime = lastAction.previousMatchState?.endTime;
           newMatch.totalDuration = lastAction.previousMatchState?.totalDuration;
@@ -562,6 +594,16 @@ export const useMatchStore = create<MatchState>()(
           
           if (shouldCompleteMatch(newMatch.sets)) {
             newMatch.isCompleted = true;
+            
+            // End timing when match is completed
+            if (newMatch.startTime && !newMatch.endTime) {
+              const endTime = new Date().toISOString();
+              const startTime = new Date(newMatch.startTime);
+              const totalDuration = new Date(endTime).getTime() - startTime.getTime();
+              
+              newMatch.endTime = endTime;
+              newMatch.totalDuration = totalDuration;
+            }
           }
         }
         
@@ -786,6 +828,16 @@ export const useMatchStore = create<MatchState>()(
           if (shouldCompleteMatch(newMatch.sets)) {
             newMatch.isCompleted = true;
             matchWasCompleted = true;
+            
+            // End timing when match is completed via regular game
+            if (newMatch.startTime && !newMatch.endTime) {
+              const endTime = new Date().toISOString();
+              const startTime = new Date(newMatch.startTime);
+              const totalDuration = new Date(endTime).getTime() - startTime.getTime();
+              
+              newMatch.endTime = endTime;
+              newMatch.totalDuration = totalDuration;
+            }
           } else {
             // Add a new set if match is not completed
             // Determine if this should be a special third set
@@ -1103,6 +1155,16 @@ export const useMatchStore = create<MatchState>()(
         // Check if this completes the match
         if (shouldCompleteMatch(newMatch.sets)) {
           newMatch.isCompleted = true;
+          
+          // End timing when match is completed
+          if (newMatch.startTime && !newMatch.endTime) {
+            const endTime = new Date().toISOString();
+            const startTime = new Date(newMatch.startTime);
+            const totalDuration = new Date(endTime).getTime() - startTime.getTime();
+            
+            newMatch.endTime = endTime;
+            newMatch.totalDuration = totalDuration;
+          }
         }
         
         return {

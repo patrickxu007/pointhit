@@ -147,8 +147,8 @@ export default function TiebreakTracker({
       return;
     }
     
-    // DO NOT start timing for tiebreak points
-    // Timing should only start with regular points
+    // Note: Timing is handled automatically in the store
+    // It will start with the first point of the match (regular or tiebreak)
     
     const point: TiebreakPoint = {
       id: Date.now().toString(),
