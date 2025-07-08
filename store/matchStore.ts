@@ -372,18 +372,18 @@ export const useMatchStore = create<MatchState>()(
         const previousTiebreakState = {
           playerPoints: newTiebreak.playerPoints,
           opponentPoints: newTiebreak.opponentPoints,
-          isCompleted: newTiebreak.isCompleted
+          isCompleted: newTiebreak.isCompleted || false
         };
         
         const previousSetState = {
           playerGames: set.playerGames,
           opponentGames: set.opponentGames,
-          isCompleted: set.isCompleted,
+          isCompleted: set.isCompleted || false,
           tiebreakExists: !!set.tiebreak
         };
         
         const previousMatchState = {
-          isCompleted: newMatch.isCompleted,
+          isCompleted: newMatch.isCompleted || false,
           endTime: newMatch.endTime,
           totalDuration: newMatch.totalDuration
         };
@@ -640,18 +640,18 @@ export const useMatchStore = create<MatchState>()(
         const previousGameState = {
           playerScore: game.playerScore,
           opponentScore: game.opponentScore,
-          isCompleted: game.isCompleted
+          isCompleted: game.isCompleted || false
         };
         
         const previousSetState = {
           playerGames: set.playerGames,
           opponentGames: set.opponentGames,
-          isCompleted: set.isCompleted,
+          isCompleted: set.isCompleted || false,
           tiebreakExists: !!set.tiebreak
         };
         
         const previousMatchState = {
-          isCompleted: newMatch.isCompleted,
+          isCompleted: newMatch.isCompleted || false,
           endTime: newMatch.endTime,
           totalDuration: newMatch.totalDuration
         };
