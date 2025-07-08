@@ -369,7 +369,12 @@ export default function MatchDetailsScreen() {
         if (match.aiInsights.rawResponse) {
           // Enhanced AI response parsing function
           const parseAIResponse = (rawResponse: string) => {
-            const insights = {
+            const insights: {
+              whatYouDidWell: string[];
+              areasToImprove: string[];
+              trainingRecommendations: string[];
+              overallAssessment: string;
+            } = {
               whatYouDidWell: [],
               areasToImprove: [],
               trainingRecommendations: [],
