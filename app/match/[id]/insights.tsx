@@ -292,13 +292,15 @@ export default function AIInsightsScreen() {
     
     if (match.aiInsights.rawResponse) {
       const parsed = parseRawResponse(match.aiInsights.rawResponse);
+      const aiParsed = parseAIResponse(match.aiInsights.rawResponse);
       
       return {
         openingStatement: parsed.openingStatement,
         whatYouDidWell: cleanInsightItems(match.aiInsights.whatYouDidWell),
         areasToImprove: cleanInsightItems(match.aiInsights.areasToImprove).slice(0, 3), // Limit to 3 items
         trainingRecommendations: cleanInsightItems(match.aiInsights.trainingRecommendations).slice(0, 3), // Limit to 3 items
-        overallAssessment: cleanMarkdownText(match.aiInsights.overallAssessment),
+        // Use the AI parsed overall assessment which prioritizes "Final Comments"
+        overallAssessment: aiParsed.overallAssessment || cleanMarkdownText(match.aiInsights.overallAssessment),
       };
     }
     
@@ -709,6 +711,27 @@ export default function AIInsightsScreen() {
         });
       };
 
+      // Enhanced function to extract text content from a section (for overall assessment)
+      const extractTextFromSection = (sectionText: string): string => {
+        const lines = sectionText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+        
+        let content = '';
+        
+        for (const line of lines) {
+          // Skip section headers
+          if (isLikelySectionHeader(line)) {
+            continue;
+          }
+          
+          // Add line to content
+          if (line.length > 0) {
+            content += (content ? ' ' : '') + line;
+          }
+        }
+        
+        return cleanMarkdownText(content.trim());
+      };
+
       // Helper function to check if a line is likely a section header
       const isLikelySectionHeader = (line: string): boolean => {
         const headerPatterns = [
@@ -757,7 +780,7 @@ export default function AIInsightsScreen() {
           'what went well', 'what you did well', 'strengths', 'positives',
           'areas to improve', 'areas for improvement', 'improvement', 'weaknesses', 'areas to work on',
           'suggested drill', 'suggested drall', 'training', 'practice', 'recommendations', 'drills', 'dralls', 'exercises',
-          'overall', 'final', 'assessment', 'summary', 'conclusion', 'opening statement'
+          'overall', 'final', 'assessment', 'summary', 'conclusion', 'opening statement', 'final comments'
         ];
         
         for (let i = startIndex + 1; i < lines.length; i++) {
@@ -798,14 +821,21 @@ export default function AIInsightsScreen() {
         insights.trainingRecommendations = extractItemsFromSection(sectionText);
       }
       
-      // Overall assessment section
-      const overallKeywords = ['overall', 'final', 'assessment', 'summary', 'conclusion', 'opening statement', 'performance story'];
-      const overallSection = detectSectionInText(cleanedResponse, overallKeywords);
-      if (overallSection) {
-        const sectionText = lines.slice(overallSection.start, overallSection.end).join('\n');
-        const overallItems = extractItemsFromSection(sectionText);
-        if (overallItems.length > 0) {
-          insights.overallAssessment = overallItems[0]; // Take the first substantial paragraph
+      // Overall assessment section - prioritize "Final Comments" over other sections
+      const finalCommentsKeywords = ['final comments', 'final comment'];
+      const finalCommentsSection = detectSectionInText(cleanedResponse, finalCommentsKeywords);
+      
+      if (finalCommentsSection) {
+        // Use Final Comments section if found
+        const sectionText = lines.slice(finalCommentsSection.start, finalCommentsSection.end).join('\n');
+        insights.overallAssessment = extractTextFromSection(sectionText);
+      } else {
+        // Fallback to other overall assessment keywords
+        const overallKeywords = ['overall', 'final', 'assessment', 'summary', 'conclusion', 'opening statement', 'performance story'];
+        const overallSection = detectSectionInText(cleanedResponse, overallKeywords);
+        if (overallSection) {
+          const sectionText = lines.slice(overallSection.start, overallSection.end).join('\n');
+          insights.overallAssessment = extractTextFromSection(sectionText);
         }
       }
 
@@ -1256,27 +1286,10 @@ export default function AIInsightsScreen() {
     );
   };
 
+  // Remove individual section TTS buttons - only keep main button
   const renderSectionTTSButton = (sectionName: string, items: string[], title: string) => {
-    if (Platform.OS === 'web' || !ttsState.isInitialized || ttsState.initializationFailed) {
-      return null;
-    }
-
-    const isCurrentSection = ttsState.currentSection === sectionName;
-    const isPlaying = isCurrentSection && ttsState.isPlaying && !ttsState.isPaused;
-
-    return (
-      <TouchableOpacity
-        style={[styles.sectionTTSButton, isCurrentSection && styles.activeTTSButton]}
-        onPress={() => speakSection(sectionName, items, title)}
-        disabled={ttsState.isPlaying && !ttsState.isPaused && !isCurrentSection}
-      >
-        {isPlaying ? (
-          <Pause size={14} color={isCurrentSection ? "#fff" : Colors.primary} />
-        ) : (
-          <Play size={14} color={isCurrentSection ? "#fff" : Colors.primary} />
-        )}
-      </TouchableOpacity>
-    );
+    // Always return null to remove section-specific TTS buttons
+    return null;
   };
 
   const renderLLMInfo = () => {
