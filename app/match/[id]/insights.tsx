@@ -1205,7 +1205,7 @@ export default function AIInsightsScreen() {
         <View style={styles.webTTSMessage}>
           <Volume2 size={20} color={Colors.textSecondary} />
           <Text style={styles.webTTSText}>
-            🎧 Audio coaching not available on this device
+            🎧 Audio coaching available on mobile devices
           </Text>
         </View>
       );
@@ -1382,7 +1382,7 @@ export default function AIInsightsScreen() {
                   <View style={styles.insightSection}>
                     <View style={styles.insightSectionHeader}>
                       <CheckCircle size={20} color={Colors.success} />
-                      <Text style={styles.insightSectionTitle}>🌟 What You Absolutely Crushed</Text>
+                      <Text style={styles.insightSectionTitle}>🌟 What You Crushed</Text>
                       {renderSectionTTSButton('strengths', displayInsights.whatYouDidWell, 'What you absolutely crushed')}
                     </View>
                     <View style={styles.insightList}>
@@ -1398,7 +1398,7 @@ export default function AIInsightsScreen() {
                   <View style={styles.insightSection}>
                     <View style={styles.insightSectionHeader}>
                       <Target size={20} color={Colors.error} />
-                      <Text style={styles.insightSectionTitle}>🚀 Exciting Level Up Opportunities</Text>
+                      <Text style={styles.insightSectionTitle}>🚀 Level Up Opportunities</Text>
                       {renderSectionTTSButton('improvements', displayInsights.areasToImprove, 'Exciting areas to improve')}
                     </View>
                     <View style={styles.insightList}>
@@ -1414,7 +1414,7 @@ export default function AIInsightsScreen() {
                   <View style={styles.insightSection}>
                     <View style={styles.insightSectionHeader}>
                       <TrendingUp size={20} color={Colors.primary} />
-                      <Text style={styles.insightSectionTitle}>🏆 Amazing Training Roadmap</Text>
+                      <Text style={styles.insightSectionTitle}>🏆 Training Roadmap</Text>
                       {renderSectionTTSButton('training', displayInsights.trainingRecommendations, 'Amazing training recommendations')}
                     </View>
                     <View style={styles.insightList}>
@@ -2031,7 +2031,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   insightSectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: Colors.text,
     flex: 1,

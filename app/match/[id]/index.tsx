@@ -315,11 +315,266 @@ export default function MatchDetailsScreen() {
       `;
     };
 
-    // AI Insights section for PDF
+    // AI Insights section for PDF - using the same content as the insights view
     const generateAIInsightsSection = () => {
       if (!match.aiInsights) return '';
       
-      const insights = match.aiInsights;
+      // Get the same display insights used in the insights view
+      const getDisplayInsights = () => {
+        if (!match.aiInsights) return null;
+        
+        // Enhanced text cleaning function to remove all markdown formatting
+        const cleanMarkdownText = (text) => {
+          if (!text) return '';
+          
+          return text
+            // Remove all ** characters (bold markdown)
+            .replace(/\*\*/g, '')
+            // Remove all * characters (italic markdown) but be careful not to remove bullet points
+            .replace(/(?<!\s)\*(?!\s)/g, '')
+            // Remove other markdown formatting
+            .replace(/_{2,}/g, '') // Remove __ (underline)
+            .replace(/`{1,3}/g, '') // Remove ` and ``` (code)
+            .replace(/#{1,6}\s*/g, '') // Remove # headers
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Convert [text](link) to just text
+            // Clean up extra whitespace
+            .replace(/\s+/g, ' ')
+            .trim();
+        };
+        
+        // Enhanced helper function to clean and filter insight items
+        const cleanInsightItems = (items) => {
+          return items
+            .map(item => cleanMarkdownText(item.trim()))
+            .filter(item => item.length > 0)
+            .filter(item => {
+              const emojiOnlyPattern = /^[🎯💡🎾🚀🌟🏆\s\*\-\•\.\,\!\?\:]+$/;
+              return !emojiOnlyPattern.test(item);
+            })
+            .filter(item => {
+              const punctuationOnlyPattern = /^[\s\*\-\•\.\,\!\?\:]+$/;
+              return !punctuationOnlyPattern.test(item);
+            })
+            .filter(item => {
+              const numberBulletPattern = /^[\d\.\)\s\-\•\*]+$/;
+              return !numberBulletPattern.test(item);
+            })
+            .filter(item => {
+              const headerPattern = /^(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i;
+              const isJustHeader = headerPattern.test(item) && item.split(' ').length <= 3;
+              return !isJustHeader;
+            });
+        };
+        
+        if (match.aiInsights.rawResponse) {
+          // Enhanced AI response parsing function
+          const parseAIResponse = (rawResponse) => {
+            const insights = {
+              whatYouDidWell: [],
+              areasToImprove: [],
+              trainingRecommendations: [],
+              overallAssessment: '',
+            };
+        
+            try {
+              let cleanedResponse = rawResponse;
+              
+              // Remove <think> tags if present
+              cleanedResponse = cleanedResponse.replace(/<think>[\s\S]*?<\/think>/gi, '');
+              
+              // Try to extract JSON if the response is wrapped in JSON
+              try {
+                const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                  const jsonResponse = JSON.parse(jsonMatch[0]);
+                  if (jsonResponse.insights) {
+                    cleanedResponse = jsonResponse.insights;
+                  }
+                }
+              } catch (jsonError) {
+                // If not JSON, continue with the original response
+              }
+        
+              // Enhanced section detection
+              const detectSectionInText = (text, sectionKeywords) => {
+                const lines = text.split('\n');
+                let startIndex = -1;
+                let endIndex = lines.length;
+                
+                for (let i = 0; i < lines.length; i++) {
+                  const line = lines[i].toLowerCase().trim();
+                  if (sectionKeywords.some(keyword => line.includes(keyword))) {
+                    startIndex = i;
+                    break;
+                  }
+                }
+                
+                if (startIndex === -1) return null;
+                
+                const allSectionKeywords = [
+                  'what went well', 'what you did well', 'strengths', 'positives',
+                  'areas to improve', 'areas for improvement', 'improvement', 'weaknesses', 'areas to work on',
+                  'suggested drill', 'suggested drall', 'training', 'practice', 'recommendations', 'drills', 'dralls', 'exercises',
+                  'overall', 'final', 'assessment', 'summary', 'conclusion', 'opening statement', 'final comments'
+                ];
+                
+                for (let i = startIndex + 1; i < lines.length; i++) {
+                  const line = lines[i].toLowerCase().trim();
+                  if (allSectionKeywords.some(keyword => keyword !== sectionKeywords.find(k => line.includes(k)) && line.includes(keyword))) {
+                    endIndex = i;
+                    break;
+                  }
+                }
+                
+                return { start: startIndex, end: endIndex };
+              };
+              
+              const extractItemsFromSection = (sectionText) => {
+                const items = [];
+                const lines = sectionText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                
+                let currentItem = '';
+                
+                for (const line of lines) {
+                  const isLikelySectionHeader = (line) => {
+                    const headerPatterns = [
+                      /^(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i,
+                      /^(what\s+went\s+well|areas?\s+to\s+improve|suggested?\s+drill|training\s+recommendation)/i,
+                      /^\*\*(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i
+                    ];
+                    return headerPatterns.some(pattern => pattern.test(line.trim())) && line.split(' ').length <= 5;
+                  };
+                  
+                  if (isLikelySectionHeader(line)) {
+                    continue;
+                  }
+                  
+                  const numberedMatch = line.match(/^(\d+[\.\)]\s*|[-•*]\s*|[a-zA-Z][\.\)]\s*)(.+)$/);
+                  if (numberedMatch && numberedMatch[2]) {
+                    if (currentItem.trim()) {
+                      items.push(cleanMarkdownText(currentItem.trim()));
+                    }
+                    currentItem = numberedMatch[2].trim();
+                  } else if (line.length > 0 && !isLikelySectionHeader(line)) {
+                    if (currentItem) {
+                      currentItem += ' ' + line;
+                    } else {
+                      currentItem = line;
+                    }
+                  }
+                }
+                
+                if (currentItem.trim()) {
+                  items.push(cleanMarkdownText(currentItem.trim()));
+                }
+                
+                return items.filter(item => {
+                  const cleaned = item.trim();
+                  return cleaned.length > 10 && 
+                         !/^[🎯💡🎾🚀🌟🏆\s\*\-\•\.\,\!\?\:\(\)]+$/.test(cleaned) &&
+                         !isLikelySectionHeader(cleaned);
+                });
+              };
+              
+              const extractTextFromSection = (sectionText) => {
+                const lines = sectionText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                let content = '';
+                
+                for (const line of lines) {
+                  const isLikelySectionHeader = (line) => {
+                    const headerPatterns = [
+                      /^(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i,
+                      /^(what\s+went\s+well|areas?\s+to\s+improve|suggested?\s+drill|training\s+recommendation)/i,
+                      /^\*\*(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i
+                    ];
+                    return headerPatterns.some(pattern => pattern.test(line.trim())) && line.split(' ').length <= 5;
+                  };
+                  
+                  if (isLikelySectionHeader(line)) {
+                    continue;
+                  }
+                  
+                  if (line.length > 0) {
+                    content += (content ? ' ' : '') + line;
+                  }
+                }
+                
+                return cleanMarkdownText(content.trim());
+              };
+        
+              const lines = cleanedResponse.split('\n');
+              
+              // What went well section
+              const strengthsKeywords = ['what went well', 'what you did well', 'strengths', 'positives', 'what you crushed'];
+              const strengthsSection = detectSectionInText(cleanedResponse, strengthsKeywords);
+              if (strengthsSection) {
+                const sectionText = lines.slice(strengthsSection.start, strengthsSection.end).join('\n');
+                insights.whatYouDidWell = extractItemsFromSection(sectionText);
+              }
+              
+              // Areas to improve section
+              const improvementKeywords = ['areas to improve', 'areas for improvement', 'improvement', 'weaknesses', 'areas to work on', 'level up opportunities'];
+              const improvementSection = detectSectionInText(cleanedResponse, improvementKeywords);
+              if (improvementSection) {
+                const sectionText = lines.slice(improvementSection.start, improvementSection.end).join('\n');
+                insights.areasToImprove = extractItemsFromSection(sectionText);
+              }
+              
+              // Training recommendations section
+              const trainingKeywords = ['suggested drill', 'suggested drall', 'training', 'practice', 'recommendations', 'drills', 'dralls', 'exercises', 'training roadmap', 'amazing training'];
+              const trainingSection = detectSectionInText(cleanedResponse, trainingKeywords);
+              if (trainingSection) {
+                const sectionText = lines.slice(trainingSection.start, trainingSection.end).join('\n');
+                insights.trainingRecommendations = extractItemsFromSection(sectionText);
+              }
+              
+              // Overall assessment section - prioritize "Final Comments"
+              const finalCommentsKeywords = ['final comments', 'final comment'];
+              const finalCommentsSection = detectSectionInText(cleanedResponse, finalCommentsKeywords);
+              
+              if (finalCommentsSection) {
+                const sectionText = lines.slice(finalCommentsSection.start, finalCommentsSection.end).join('\n');
+                insights.overallAssessment = extractTextFromSection(sectionText);
+              } else {
+                const overallKeywords = ['overall', 'final', 'assessment', 'summary', 'conclusion', 'opening statement', 'performance story'];
+                const overallSection = detectSectionInText(cleanedResponse, overallKeywords);
+                if (overallSection) {
+                  const sectionText = lines.slice(overallSection.start, overallSection.end).join('\n');
+                  insights.overallAssessment = extractTextFromSection(sectionText);
+                }
+              }
+        
+              // Enforce limits for specific sections
+              insights.areasToImprove = insights.areasToImprove.slice(0, 3);
+              insights.trainingRecommendations = insights.trainingRecommendations.slice(0, 3);
+        
+            } catch (error) {
+              console.error('Error parsing AI response:', error);
+            }
+        
+            return insights;
+          };
+          
+          const aiParsed = parseAIResponse(match.aiInsights.rawResponse);
+          
+          return {
+            whatYouDidWell: cleanInsightItems(match.aiInsights.whatYouDidWell),
+            areasToImprove: cleanInsightItems(match.aiInsights.areasToImprove).slice(0, 3),
+            trainingRecommendations: cleanInsightItems(match.aiInsights.trainingRecommendations).slice(0, 3),
+            overallAssessment: aiParsed.overallAssessment || cleanMarkdownText(match.aiInsights.overallAssessment),
+          };
+        }
+        
+        return {
+          whatYouDidWell: cleanInsightItems(match.aiInsights.whatYouDidWell),
+          areasToImprove: cleanInsightItems(match.aiInsights.areasToImprove).slice(0, 3),
+          trainingRecommendations: cleanInsightItems(match.aiInsights.trainingRecommendations).slice(0, 3),
+          overallAssessment: cleanMarkdownText(match.aiInsights.overallAssessment),
+        };
+      };
+      
+      const displayInsights = getDisplayInsights();
+      if (!displayInsights) return '';
       
       return `
         <div style="margin-bottom: 45px; page-break-inside: avoid;">
@@ -329,34 +584,34 @@ export default function MatchDetailsScreen() {
             
             <div style="margin-bottom: 32px;">
               <h4 style="color: #27ae60; font-size: 18px; margin-bottom: 16px; display: flex; align-items: center;">
-                <span style="margin-right: 8px;">✅</span> What You Did Well
+                <span style="margin-right: 8px;">🌟</span> What You Crushed
               </h4>
               <ul style="margin: 0; padding-left: 20px; color: #2c3e50; line-height: 1.6;">
-                ${insights.whatYouDidWell.map(item => `<li style="margin-bottom: 8px;">${item}</li>`).join('')}
+                ${displayInsights.whatYouDidWell.map(item => `<li style="margin-bottom: 8px;">${item}</li>`).join('')}
               </ul>
             </div>
             
             <div style="margin-bottom: 32px;">
               <h4 style="color: #e74c3c; font-size: 18px; margin-bottom: 16px; display: flex; align-items: center;">
-                <span style="margin-right: 8px;">🎯</span> Areas to Improve
+                <span style="margin-right: 8px;">🚀</span> Level Up Opportunities
               </h4>
               <ul style="margin: 0; padding-left: 20px; color: #2c3e50; line-height: 1.6;">
-                ${insights.areasToImprove.map(item => `<li style="margin-bottom: 8px;">${item}</li>`).join('')}
+                ${displayInsights.areasToImprove.map(item => `<li style="margin-bottom: 8px;">${item}</li>`).join('')}
               </ul>
             </div>
             
             <div style="margin-bottom: 32px;">
               <h4 style="color: #3498db; font-size: 18px; margin-bottom: 16px; display: flex; align-items: center;">
-                <span style="margin-right: 8px;">📈</span> Training Recommendations
+                <span style="margin-right: 8px;">🏆</span> Training Roadmap
               </h4>
               <ul style="margin: 0; padding-left: 20px; color: #2c3e50; line-height: 1.6;">
-                ${insights.trainingRecommendations.map(item => `<li style="margin-bottom: 8px;">${item}</li>`).join('')}
+                ${displayInsights.trainingRecommendations.map(item => `<li style="margin-bottom: 8px;">${item}</li>`).join('')}
               </ul>
             </div>
             
             <div style="background: linear-gradient(135deg, #f8f9fa, #e9ecef); padding: 20px; border-radius: 12px; border-left: 4px solid #9b59b6;">
-              <h4 style="color: #2c3e50; font-size: 16px; margin-bottom: 12px; font-weight: 700;">Overall Assessment</h4>
-              <p style="margin: 0; color: #2c3e50; line-height: 1.6; font-size: 15px;">${insights.overallAssessment}</p>
+              <h4 style="color: #2c3e50; font-size: 16px; margin-bottom: 12px; font-weight: 700;">Your Overall Performance Story</h4>
+              <p style="margin: 0; color: #2c3e50; line-height: 1.6; font-size: 15px;">${displayInsights.overallAssessment}</p>
             </div>
           </div>
         </div>
