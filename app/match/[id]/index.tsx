@@ -324,7 +324,7 @@ export default function MatchDetailsScreen() {
         if (!match.aiInsights) return null;
         
         // Enhanced text cleaning function to remove all markdown formatting
-        const cleanMarkdownText = (text) => {
+        const cleanMarkdownText = (text: string) => {
           if (!text) return '';
           
           return text
@@ -343,23 +343,23 @@ export default function MatchDetailsScreen() {
         };
         
         // Enhanced helper function to clean and filter insight items
-        const cleanInsightItems = (items) => {
+        const cleanInsightItems = (items: string[]) => {
           return items
-            .map(item => cleanMarkdownText(item.trim()))
-            .filter(item => item.length > 0)
-            .filter(item => {
+            .map((item: string) => cleanMarkdownText(item.trim()))
+            .filter((item: string) => item.length > 0)
+            .filter((item: string) => {
               const emojiOnlyPattern = /^[🎯💡🎾🚀🌟🏆\s\*\-\•\.\,\!\?\:]+$/;
               return !emojiOnlyPattern.test(item);
             })
-            .filter(item => {
+            .filter((item: string) => {
               const punctuationOnlyPattern = /^[\s\*\-\•\.\,\!\?\:]+$/;
               return !punctuationOnlyPattern.test(item);
             })
-            .filter(item => {
+            .filter((item: string) => {
               const numberBulletPattern = /^[\d\.\)\s\-\•\*]+$/;
               return !numberBulletPattern.test(item);
             })
-            .filter(item => {
+            .filter((item: string) => {
               const headerPattern = /^(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i;
               const isJustHeader = headerPattern.test(item) && item.split(' ').length <= 3;
               return !isJustHeader;
@@ -368,7 +368,7 @@ export default function MatchDetailsScreen() {
         
         if (match.aiInsights.rawResponse) {
           // Enhanced AI response parsing function
-          const parseAIResponse = (rawResponse) => {
+          const parseAIResponse = (rawResponse: string) => {
             const insights = {
               whatYouDidWell: [],
               areasToImprove: [],
@@ -396,14 +396,14 @@ export default function MatchDetailsScreen() {
               }
         
               // Enhanced section detection
-              const detectSectionInText = (text, sectionKeywords) => {
+              const detectSectionInText = (text: string, sectionKeywords: string[]) => {
                 const lines = text.split('\n');
                 let startIndex = -1;
                 let endIndex = lines.length;
                 
                 for (let i = 0; i < lines.length; i++) {
                   const line = lines[i].toLowerCase().trim();
-                  if (sectionKeywords.some(keyword => line.includes(keyword))) {
+                  if (sectionKeywords.some((keyword: string) => line.includes(keyword))) {
                     startIndex = i;
                     break;
                   }
@@ -420,7 +420,7 @@ export default function MatchDetailsScreen() {
                 
                 for (let i = startIndex + 1; i < lines.length; i++) {
                   const line = lines[i].toLowerCase().trim();
-                  if (allSectionKeywords.some(keyword => keyword !== sectionKeywords.find(k => line.includes(k)) && line.includes(keyword))) {
+                  if (allSectionKeywords.some((k: string) => k !== sectionKeywords.find((keyword: string) => line.includes(keyword)) && line.includes(k))) {
                     endIndex = i;
                     break;
                   }
@@ -429,14 +429,14 @@ export default function MatchDetailsScreen() {
                 return { start: startIndex, end: endIndex };
               };
               
-              const extractItemsFromSection = (sectionText) => {
+              const extractItemsFromSection = (sectionText: string) => {
                 const items = [];
-                const lines = sectionText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                const lines = sectionText.split('\n').map((line: string) => line.trim()).filter((line: string) => line.length > 0);
                 
                 let currentItem = '';
                 
                 for (const line of lines) {
-                  const isLikelySectionHeader = (line) => {
+                  const isLikelySectionHeader = (line: string) => {
                     const headerPatterns = [
                       /^(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i,
                       /^(what\s+went\s+well|areas?\s+to\s+improve|suggested?\s+drill|training\s+recommendation)/i,
@@ -468,8 +468,16 @@ export default function MatchDetailsScreen() {
                   items.push(cleanMarkdownText(currentItem.trim()));
                 }
                 
-                return items.filter(item => {
+                return items.filter((item: string) => {
                   const cleaned = item.trim();
+                  const isLikelySectionHeader = (line: string) => {
+                    const headerPatterns = [
+                      /^(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i,
+                      /^(what\s+went\s+well|areas?\s+to\s+improve|suggested?\s+drill|training\s+recommendation)/i,
+                      /^\*\*(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i
+                    ];
+                    return headerPatterns.some(pattern => pattern.test(line.trim())) && line.split(' ').length <= 5;
+                  };
                   return cleaned.length > 10 && 
                          !/^[🎯💡🎾🚀🌟🏆\s\*\-\•\.\,\!\?\:\(\)]+$/.test(cleaned) &&
                          !isLikelySectionHeader(cleaned);
@@ -477,11 +485,11 @@ export default function MatchDetailsScreen() {
               };
               
               const extractTextFromSection = (sectionText) => {
-                const lines = sectionText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                const lines = sectionText.split('\n').map((line: string) => line.trim()).filter((line: string) => line.length > 0);
                 let content = '';
                 
                 for (const line of lines) {
-                  const isLikelySectionHeader = (line) => {
+                  const isLikelySectionHeader = (line: string) => {
                     const headerPatterns = [
                       /^(what|areas?|suggested?|training|drill|recommendation|practice|exercise|overall|final|opening|strength|weakness|improvement)/i,
                       /^(what\s+went\s+well|areas?\s+to\s+improve|suggested?\s+drill|training\s+recommendation)/i,
