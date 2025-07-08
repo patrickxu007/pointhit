@@ -484,7 +484,7 @@ export default function MatchDetailsScreen() {
                 });
               };
               
-              const extractTextFromSection = (sectionText) => {
+              const extractTextFromSection = (sectionText: string) => {
                 const lines = sectionText.split('\n').map((line: string) => line.trim()).filter((line: string) => line.length > 0);
                 let content = '';
                 
