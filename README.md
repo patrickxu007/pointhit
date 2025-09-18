@@ -14,9 +14,9 @@ A comprehensive React Native app for tracking tennis matches with AI-powered ins
 ## Tech Stack
 
 - **Frontend**: React Native with Expo
-- **Backend**: Hono.js with tRPC
+- **Backend**: https://pointhit.com/tennis-insights
 - **State Management**: Zustand
-- **AI**: Rork Toolkit LLM API (GPT-based)
+- **AI**: Qwen3_235b
 - **TTS**: Expo Speech
 - **Icons**: Lucide React Native
 
@@ -62,7 +62,7 @@ The app uses the Rork Toolkit LLM API for generating personalized tennis coachin
 - Shot type analysis
 
 ### LLM Information
-- **Primary**: Rork Toolkit LLM API (GPT-based model)
+- **Primary**: Qwen3_235b
 - **Fallback**: Rule-based analysis when AI is unavailable
 - **Features**: Personalized coaching feedback, training recommendations
 
